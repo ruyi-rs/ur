@@ -1,0 +1,19 @@
+[package]
+name = "iou"
+version = "0.1.0"
+authors = ["Agemo Cui <agemo.git.cui@gmail.com>"]
+edition = "2018"
+description = "A pure Rust library for io_uring"
+license = "MIT OR Apache-2.0"
+documentation = "https://docs.rs/ruyi-iou"
+homepage = "https://github.com/ruyi-rs/iou"
+repository = "https://github.com/ruyi-rs/iou"
+readme = "README.md"
+keywords = ["async", "io", "uring", "non-blocking"]
+categories = ["asynchronous", "filesystem", "network-programming"]
+include = ["Cargo.toml", "src/**/*.rs", "README.md", "LICENSE-APACHE", "LICENSE-MIT"]
+
+[dependencies]
+libc = "0.2"
+ruyi-slab = "0.1"
+bitflags = "1.2"
