@@ -22,7 +22,12 @@ pub struct IoUring {
     fd: libc::c_int,
 }
 
-impl IoUring {}
+impl IoUring {
+    #[inline]
+    pub fn entries(entries: u32) -> Builder {
+        Builder::new(entries)
+    }
+}
 
 impl Drop for IoUring {
     #[inline]
@@ -31,40 +36,26 @@ impl Drop for IoUring {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct IoUringBuilder {
-    entries: usize,
-    flags: u32,
-    sq_thread_cpu: u32,
-    sq_thread_idle: u32,
+#[derive(Debug)]
+pub struct Builder {
+    entries: u32,
+    builder: params::Builder,
 }
 
-impl IoUringBuilder {
+impl Builder {
     #[inline]
-    pub fn new() -> Self {
+    const fn new(entries: u32) -> Self {
         Self {
-            entries: 1,
-            ..Default::default()
+            entries,
+            builder: Params::builder(),
         }
     }
 
     #[inline]
-    pub fn entries(&mut self, entries: usize) -> &mut Self {
-        assert!(
-            entries >= 1 && entries <= 4096,
-            "entries={} is not in the range of [1..4096]",
-            entries
-        );
-
-        self.entries = entries.next_power_of_two();
-        self
-    }
-
-    #[inline]
-    pub fn 
-    #[inline]
     pub fn try_build(&self) -> Result<IoUring> {
-        let fd = unsafe { sys::io_uring_setup(self.entries as libc::c_uint, &mut params) };
+        let entries = self.entries.next_power_of_two();
+        let mut params = self.builder.build();
+        let fd = unsafe { sys::io_uring_setup(entries, params.as_mut()) };
         if fd < 0 {
             return Err(Error::last_os_error());
         }
