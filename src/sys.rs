@@ -1,8 +1,12 @@
-use std::{fmt, mem};
+use std::io::{Error, Result};
 use std::marker::PhantomData;
+use std::os::unix::io::RawFd;
+use std::{fmt, mem};
 
 use bitflags::bitflags;
 use libc;
+
+use crate::params;
 
 #[allow(non_camel_case_types)]
 pub type __kernel_rwf_t = libc::c_int;
@@ -290,7 +294,7 @@ pub struct IoUringProbe {
 }
 
 #[inline]
-pub unsafe fn io_uring_register(
+unsafe fn io_uring_register(
     fd: libc::c_int,
     opcode: libc::c_uint,
     arg: *const libc::c_void,
@@ -303,15 +307,15 @@ pub unsafe fn io_uring_register(
 }
 
 #[inline]
-pub unsafe fn io_uring_setup(entries: libc::c_uint, p: *mut IoUringParams) -> libc::c_int {
+pub fn io_uring_setup(entries: u32, p: &mut params::IoUringParams) -> libc::c_int {
     #[allow(non_upper_case_globals)]
     const __NR_io_uring_setup: libc::c_long = 426;
 
-    libc::syscall(__NR_io_uring_setup, entries, p) as libc::c_int
+    libc::syscall(__NR_io_uring_setup, entries as libc::c_uint, p) as libc::c_int
 }
 
 #[inline]
-pub unsafe fn io_uring_enter(
+unsafe fn io_uring_enter(
     fd: libc::c_int,
     to_submit: libc::c_uint,
     min_complete: libc::c_uint,
