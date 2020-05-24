@@ -46,7 +46,7 @@ pub struct IoUringBuilder {
 
 impl IoUringBuilder {
     #[inline]
-    const fn new(entries: u32) -> Self {
+    fn new(entries: u32) -> Self {
         Self {
             entries: entries.next_power_of_two(),
             params: IoUringParams::builder(),
