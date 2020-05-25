@@ -34,8 +34,8 @@ impl IoUring {
 impl Drop for IoUring {
     #[inline]
     fn drop(&mut self) {
-        syscall::close(self.fd).unwrap_or(());
-        todo!();
+        // TODO: unmap
+        syscall::close(self.fd);
     }
 }
 
@@ -102,7 +102,7 @@ impl IoUringBuilder {
         let fd = syscall::io_uring_setup(self.entries, &mut params)?;
         let mut io_uring = IoUring::new(fd, params.flags());
 
-        todo!();
+        // TODO mmap
 
         Ok(io_uring)
     }

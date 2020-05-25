@@ -114,5 +114,6 @@ pub fn io_uring_penter(
 
 #[inline]
 pub fn close(fd: RawFd) -> Result<()> {
-    cvt(libc::close(fd)).and(Ok(()))
+    let ret = unsafe { libc::close(fd) };
+    cvt(ret).and(Ok(()))
 }
