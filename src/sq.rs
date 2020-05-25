@@ -1,5 +1,7 @@
 #[derive(Debug, Copy, Clone, Default)]
-pub struct Queue {}
+pub struct Queue {
+    
+}
 
 impl Queue {
     #[inline]
