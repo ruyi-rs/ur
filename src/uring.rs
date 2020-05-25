@@ -34,7 +34,8 @@ impl IoUring {
 impl Drop for IoUring {
     #[inline]
     fn drop(&mut self) {
-        todo!()
+        syscall::close(self.fd).unwrap_or(());
+        todo!();
     }
 }
 

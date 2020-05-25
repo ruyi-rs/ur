@@ -1,6 +1,4 @@
-use std::io::{Error, Result};
 use std::marker::PhantomData;
-use std::os::unix::io::RawFd;
 use std::{fmt, mem};
 
 use bitflags::bitflags;

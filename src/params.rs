@@ -17,6 +17,18 @@ bitflags! {
     }
 }
 
+// IoUringParams->features flags
+bitflags! {
+    pub struct IoRingFeat: u32 {
+        const SINGLE_MMAP       = 1 << 0;
+        const NODROP            = 1 << 1;
+        const SUBMIT_STABLE     = 1 << 2;
+        const RW_CUR_POS        = 1 << 3;
+        const CUR_PERSONALITY   = 1 << 4;
+        const FAST_POLL         = 1 << 5;
+    }
+}
+
 // Filled with the offset for mmap(2)
 // struct io_sqring_offsets
 #[repr(C)]
@@ -72,6 +84,11 @@ impl IoUringParams {
     #[inline]
     pub fn flags(&self) -> IoRingSetup {
         unsafe { IoRingSetup::from_bits_unchecked(self.flags) }
+    }
+
+    #[inline]
+    pub fn features(&self) -> IoRingFeat {
+        unsafe { IoRingFeat::from_bits_unchecked(self.features) }
     }
 }
 

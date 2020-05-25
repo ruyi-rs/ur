@@ -1,5 +1,5 @@
-use std::mem;
 use std::io::{Error, IoSlice, Result};
+use std::mem;
 use std::os::unix::io::RawFd;
 use std::ptr;
 
@@ -29,6 +29,15 @@ const IORING_REGISTER_PROBE: libc::c_uint = 8;
 const IORING_REGISTER_PERSONALITY: libc::c_uint = 9;
 const IORING_UNREGISTER_PERSONALITY: libc::c_uint = 10;
 
+#[inline]
+fn cvt(ret: libc::c_int) -> Result<libc::c_int> {
+    if ret >= 0 {
+        Ok(ret)
+    } else {
+        Err(Error::last_os_error())
+    }
+}
+
 // int __sys_io_uring_register(int fd, unsigned opcode, const void *arg, unsigned nr_args)
 #[inline]
 unsafe fn io_uring_register(
@@ -37,23 +46,15 @@ unsafe fn io_uring_register(
     arg: *const libc::c_void,
     nr_args: libc::c_uint,
 ) -> Result<()> {
-    let ret = libc::syscall(__NR_io_uring_register, fd, opcode, arg, nr_args);
-    if ret == 0 {
-        Ok(())
-    } else {
-        Err(Error::last_os_error())
-    }
+    let ret = libc::syscall(__NR_io_uring_register, fd, opcode, arg, nr_args) as libc::c_int;
+    cvt(ret).and(Ok(()))
 }
 
 // int __sys_io_uring_setup(unsigned entries, struct io_uring_params *p)
 #[inline]
 pub fn io_uring_setup(entries: libc::c_uint, p: &mut params::IoUringParams) -> Result<RawFd> {
-    let fd = unsafe { libc::syscall(__NR_io_uring_setup, entries, p) };
-    if fd >= 0 {
-        Ok(fd as RawFd)
-    } else {
-        Err(Error::last_os_error())
-    }
+    let ret = unsafe { libc::syscall(__NR_io_uring_setup, entries, p) } as libc::c_int;
+    cvt(ret)
 }
 
 #[inline]
@@ -85,16 +86,18 @@ pub fn io_uring_enter(fd: RawFd, to_submit: u32, min_complete: u32, flags: u32) 
             ptr::null::<libc::sigset_t>(),
             0,
         )
-    };
-    if n >= 0 {
-        Ok(n as usize)
-    } else {
-        Err(Error::last_os_error())
-    }
+    } as libc::c_int;
+    cvt(n).and(Ok(n as usize))
 }
 
 #[inline]
-pub fn io_uring_penter(fd: RawFd, to_submit: u32, min_complete: u32, flags: u32, sig: &libc::sigset_t) -> Result<usize> {
+pub fn io_uring_penter(
+    fd: RawFd,
+    to_submit: u32,
+    min_complete: u32,
+    flags: u32,
+    sig: &libc::sigset_t,
+) -> Result<usize> {
     let n = unsafe {
         libc::syscall(
             __NR_io_uring_enter,
@@ -105,10 +108,11 @@ pub fn io_uring_penter(fd: RawFd, to_submit: u32, min_complete: u32, flags: u32,
             sig,
             mem::size_of::<libc::sigset_t>(),
         )
-    };
-    if n >= 0 {
-        Ok(n as usize)
-    } else {
-        Err(Error::last_os_error())
-    }
+    } as libc::c_int;
+    cvt(n).and(Ok(n as usize))
+}
+
+#[inline]
+pub fn close(fd: RawFd) -> Result<()> {
+    cvt(libc::close(fd)).and(Ok(()))
 }
