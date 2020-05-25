@@ -5,7 +5,7 @@ use std::ptr;
 
 use libc;
 
-use crate::params;
+use crate::params::IoUringParams;
 
 #[allow(non_upper_case_globals)]
 const __NR_io_uring_register: libc::c_long = 425;
@@ -52,8 +52,8 @@ unsafe fn io_uring_register(
 
 // int __sys_io_uring_setup(unsigned entries, struct io_uring_params *p)
 #[inline]
-pub fn io_uring_setup(entries: u32, p: &mut params::IoUringParams) -> Result<RawFd> {
-    let ret = unsafe { libc::syscall(__NR_io_uring_setup, entries, p) } as libc::c_int;
+pub fn io_uring_setup(entries: u32, params: &mut IoUringParams) -> Result<RawFd> {
+    let ret = unsafe { libc::syscall(__NR_io_uring_setup, entries, params) } as libc::c_int;
     cvt(ret)
 }
 
@@ -116,4 +116,9 @@ pub fn io_uring_penter(
 pub fn close(fd: RawFd) -> Result<()> {
     let ret = unsafe { libc::close(fd) };
     cvt(ret).and(Ok(()))
+}
+
+#[inline]
+pub fn mmap() {
+libc::mmap(addr, len, prot, flags, fd, offset)
 }
