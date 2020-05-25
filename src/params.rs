@@ -1,7 +1,21 @@
 use std::mem::MaybeUninit;
 use std::os::unix::io::RawFd;
 
+use bitflags::bitflags;
 use libc;
+
+// io_uring_setup() flags
+// IORING_SETUP_ flags
+bitflags! {
+    pub struct IoRingSetup: u32 {
+        const IOPOLL    = 1 << 0; // io_context is polled
+        const SQPOLL    = 1 << 1; // SQ poll thread
+        const SQ_AFF    = 1 << 2; // sq_thread_cpu is valid
+        const CQSIZE    = 1 << 3; // app defines CQ size
+        const CLAMP     = 1 << 4; // clamp SQ/CQ ring sizes
+        const ATTACH_WQ = 1 << 5; // attach to existing wq
+    }
+}
 
 // Filled with the offset for mmap(2)
 // struct io_sqring_offsets
@@ -54,31 +68,28 @@ impl IoUringParams {
     pub const fn builder() -> Builder {
         Builder::new()
     }
+
+    #[inline]
+    pub fn flags(&self) -> IoRingSetup {
+        unsafe { IoRingSetup::from_bits_unchecked(self.flags) }
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
 pub struct Builder {
     cq_entries: libc::__u32,
-    flags: libc::__u32, // IORING_SETUP_ flags (IoRingSetup::*)
+    flags: IoRingSetup,
     sq_thread_cpu: libc::__u32,
     sq_thread_idle: libc::__u32,
     wq_fd: libc::__u32,
 }
 
 impl Builder {
-    // IORING_SETUP_ flags
-    const IORING_SETUP_IOPOLL: u32 = 1 << 0; // io_context is polled
-    const IORING_SETUP_SQPOLL: u32 = 1 << 1; // SQ poll thread
-    const IORING_SETUP_SQ_AFF: u32 = 1 << 2; // sq_thread_cpu is valid
-    const IORING_SETUP_CQSIZE: u32 = 1 << 3; // app defines CQ size
-    const IORING_SETUP_CLAMP: u32 = 1 << 4; // clamp SQ/CQ ring sizes
-    const IORING_SETUP_ATTACH_WQ: u32 = 1 << 5; // attach to existing wq
-
     #[inline]
     const fn new() -> Self {
         Self {
             cq_entries: 0,
-            flags: 0,
+            flags: IoRingSetup::empty(),
             sq_thread_cpu: 0,
             sq_thread_idle: 0,
             wq_fd: 0,
@@ -87,13 +98,13 @@ impl Builder {
 
     #[inline]
     pub fn iopoll(&mut self) -> &mut Self {
-        self.flags |= Self::IORING_SETUP_IOPOLL;
+        self.flags |= IoRingSetup::IOPOLL;
         self
     }
 
     #[inline]
     pub fn sqpoll(&mut self) -> &mut Self {
-        self.flags |= Self::IORING_SETUP_SQPOLL;
+        self.flags |= IoRingSetup::SQPOLL;
         self
     }
 
@@ -107,27 +118,27 @@ impl Builder {
     #[inline]
     pub fn sqpoll_cpu(&mut self, cpu: u32) -> &mut Self {
         self.sqpoll();
-        self.flags |= Self::IORING_SETUP_SQ_AFF;
+        self.flags |= IoRingSetup::SQ_AFF;
         self.sq_thread_cpu = cpu as libc::__u32;
         self
     }
 
     #[inline]
     pub fn cqsize(&mut self, cq_entries: u32) -> &mut Self {
-        self.flags |= Self::IORING_SETUP_CQSIZE;
+        self.flags |= IoRingSetup::CQSIZE;
         self.cq_entries = cq_entries;
         self
     }
 
     #[inline]
     pub fn clamp(&mut self) -> &mut Self {
-        self.flags |= Self::IORING_SETUP_CLAMP;
+        self.flags |= IoRingSetup::CLAMP;
         self
     }
 
     #[inline]
     pub fn attach_wq(&mut self, wq_fd: RawFd) -> &mut Self {
-        self.flags |= Self::IORING_SETUP_ATTACH_WQ;
+        self.flags |= IoRingSetup::ATTACH_WQ;
         self.wq_fd = wq_fd as libc::__u32;
         self
     }
@@ -136,7 +147,7 @@ impl Builder {
     pub fn build(&self) -> IoUringParams {
         let mut params: IoUringParams = unsafe { MaybeUninit::zeroed().assume_init() };
         params.cq_entries = self.cq_entries;
-        params.flags = self.flags;
+        params.flags = self.flags.bits();
         params.sq_thread_cpu = self.sq_thread_cpu;
         params.sq_thread_idle = self.sq_thread_idle;
         params.wq_fd = self.wq_fd;

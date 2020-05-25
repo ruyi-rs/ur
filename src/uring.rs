@@ -1,28 +1,28 @@
 use std::io::Result;
-use std::mem::MaybeUninit;
 use std::os::unix::io::RawFd;
 
-use crate::params::{self, IoUringParams};
+use crate::params::{self, IoRingSetup, IoUringParams};
 use crate::syscall;
-
-#[derive(Debug)]
-struct SubmissionQueue {}
-
-#[derive(Debug)]
-struct CompletionQueue {}
+use crate::sq;
+use crate::cq;
 
 #[derive(Debug)]
 pub struct IoUring {
-    sq: SubmissionQueue,
-    cq: CompletionQueue,
-    flags: u32,
+    sq: sq::Queue,
+    cq: cq::Queue,
+    flags: IoRingSetup,
     fd: RawFd,
 }
 
 impl IoUring {
     #[inline]
-    fn new() -> Self {
-        unsafe { MaybeUninit::zeroed().assume_init() }
+    fn new(fd: RawFd, flags: IoRingSetup) -> Self {
+        Self {
+            sq: sq::Queue::default(),
+            cq: cq::Queue::default(),
+            flags,
+            fd,
+        }
     }
 
     #[inline]
@@ -99,8 +99,10 @@ impl IoUringBuilder {
     pub fn try_build(&self) -> Result<IoUring> {
         let mut params = self.params.build();
         let fd = syscall::io_uring_setup(self.entries, &mut params)?;
-        let mut io_uring = IoUring::new();
-        io_uring.fd = fd;
+        let mut io_uring = IoUring::new(fd, params.flags());
+
+        todo!();
+
         Ok(io_uring)
     }
 }
