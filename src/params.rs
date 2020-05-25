@@ -2,7 +2,6 @@ use std::mem::MaybeUninit;
 use std::os::unix::io::RawFd;
 
 use bitflags::bitflags;
-use libc;
 
 // io_uring_setup() flags
 // IORING_SETUP_ flags
@@ -34,28 +33,28 @@ bitflags! {
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 struct IoSqringOffsets {
-    head: libc::__u32,
-    tail: libc::__u32,
-    ring_mask: libc::__u32,
-    ring_entries: libc::__u32,
-    flags: libc::__u32, // IoRingSq::* flags
-    dropped: libc::__u32,
-    array: libc::__u32,
-    _resv1: libc::__u32,
-    _resv2: libc::__u64,
+    head: u32,
+    tail: u32,
+    ring_mask: u32,
+    ring_entries: u32,
+    flags: u32, // IoRingSq::* flags
+    dropped: u32,
+    array: u32,
+    _resv1: u32,
+    _resv2: u64,
 }
 
 // struct io_cqring_offsets
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 struct IoCqringOffsets {
-    head: libc::__u32,
-    tail: libc::__u32,
-    ring_mask: libc::__u32,
-    ring_entries: libc::__u32,
-    overflow: libc::__u32,
-    cqes: libc::__u32,
-    _resv: libc::__u64,
+    head: u32,
+    tail: u32,
+    ring_mask: u32,
+    ring_entries: u32,
+    overflow: u32,
+    cqes: u32,
+    _resv: u64,
 }
 
 // Passed in for io_uring_setup(2). Copied back with updated info on success
@@ -63,14 +62,14 @@ struct IoCqringOffsets {
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct IoUringParams {
-    sq_entries: libc::__u32,
-    cq_entries: libc::__u32,
-    flags: libc::__u32, // IORING_SETUP_ flags (IoRingSetup::*)
-    sq_thread_cpu: libc::__u32,
-    sq_thread_idle: libc::__u32,
-    features: libc::__u32, // IoRingFeat::* flags
-    wq_fd: libc::__u32,
-    _resv: [libc::__u32; 3],
+    sq_entries: u32,
+    cq_entries: u32,
+    flags: u32, // IORING_SETUP_ flags (IoRingSetup::*)
+    sq_thread_cpu: u32,
+    sq_thread_idle: u32,
+    features: u32, // IoRingFeat::* flags
+    wq_fd: u32,
+    _resv: [u32; 3],
     sq_off: IoSqringOffsets,
     cq_off: IoCqringOffsets,
 }
@@ -94,11 +93,11 @@ impl IoUringParams {
 
 #[derive(Debug, Copy, Clone)]
 pub struct Builder {
-    cq_entries: libc::__u32,
+    cq_entries: u32,
     flags: IoRingSetup,
-    sq_thread_cpu: libc::__u32,
-    sq_thread_idle: libc::__u32,
-    wq_fd: libc::__u32,
+    sq_thread_cpu: u32,
+    sq_thread_idle: u32,
+    wq_fd: RawFd,
 }
 
 impl Builder {
@@ -128,7 +127,7 @@ impl Builder {
     #[inline]
     pub fn sqpoll_idle(&mut self, idle: u32) -> &mut Self {
         self.sqpoll();
-        self.sq_thread_idle = idle as libc::__u32;
+        self.sq_thread_idle = idle;
         self
     }
 
@@ -136,7 +135,7 @@ impl Builder {
     pub fn sqpoll_cpu(&mut self, cpu: u32) -> &mut Self {
         self.sqpoll();
         self.flags |= IoRingSetup::SQ_AFF;
-        self.sq_thread_cpu = cpu as libc::__u32;
+        self.sq_thread_cpu = cpu;
         self
     }
 
@@ -156,7 +155,7 @@ impl Builder {
     #[inline]
     pub fn attach_wq(&mut self, wq_fd: RawFd) -> &mut Self {
         self.flags |= IoRingSetup::ATTACH_WQ;
-        self.wq_fd = wq_fd as libc::__u32;
+        self.wq_fd = wq_fd;
         self
     }
 
@@ -167,7 +166,7 @@ impl Builder {
         params.flags = self.flags.bits();
         params.sq_thread_cpu = self.sq_thread_cpu;
         params.sq_thread_idle = self.sq_thread_idle;
-        params.wq_fd = self.wq_fd;
+        params.wq_fd = self.wq_fd as u32;
         params
     }
 }

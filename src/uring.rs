@@ -18,8 +18,8 @@ impl IoUring {
     #[inline]
     fn new(fd: RawFd, flags: IoRingSetup) -> Self {
         Self {
-            sq: sq::Queue::default(),
-            cq: cq::Queue::default(),
+            sq: sq::Queue::new(),
+            cq: cq::Queue::new(),
             flags,
             fd,
         }
@@ -29,13 +29,18 @@ impl IoUring {
     pub fn entries(entries: u32) -> IoUringBuilder {
         IoUringBuilder::new(entries)
     }
+
+    fn queue_mmap(&mut self, params: &IoUringParams) -> Result<()> {
+
+        Ok(())
+    }
 }
 
 impl Drop for IoUring {
     #[inline]
     fn drop(&mut self) {
-        // TODO: unmap
-        syscall::close(self.fd);
+        // TODO: munmap
+        syscall::close(self.fd).ok();
     }
 }
 
@@ -96,7 +101,6 @@ impl IoUringBuilder {
         self
     }
 
-    #[inline]
     pub fn try_build(&self) -> Result<IoUring> {
         let mut params = self.params.build();
         let fd = syscall::io_uring_setup(self.entries, &mut params)?;

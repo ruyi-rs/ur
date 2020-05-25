@@ -52,7 +52,7 @@ unsafe fn io_uring_register(
 
 // int __sys_io_uring_setup(unsigned entries, struct io_uring_params *p)
 #[inline]
-pub fn io_uring_setup(entries: libc::c_uint, p: &mut params::IoUringParams) -> Result<RawFd> {
+pub fn io_uring_setup(entries: u32, p: &mut params::IoUringParams) -> Result<RawFd> {
     let ret = unsafe { libc::syscall(__NR_io_uring_setup, entries, p) } as libc::c_int;
     cvt(ret)
 }

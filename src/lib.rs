@@ -1,4 +1,3 @@
-mod syscall;
 mod params;
 mod sys;
 mod sq;
