@@ -1,10 +1,12 @@
+use std::cmp;
 use std::io::Result;
 use std::mem::{self, MaybeUninit};
+use std::rc::Rc;
 
 use bitflags::bitflags;
 
 use crate::uring::{Fd, IoUring};
-use crate::{cq, sq, sys};
+use crate::{cq, mmap, sq, sys};
 
 // io_uring_setup() flags
 // IORING_SETUP_ flags
@@ -78,6 +80,11 @@ pub struct IoUringParams {
 }
 
 impl IoUringParams {
+    // Magic offsets for the application to mmap the data it needs
+    const IORING_OFF_SQ_RING: i64 = 0;
+    const IORING_OFF_CQ_RING: i64 = 0x800_0000;
+    const IORING_OFF_SQES: i64 = 0x1000_0000;
+
     #[inline]
     pub fn flags(&self) -> IoRingSetup {
         unsafe { IoRingSetup::from_bits_unchecked(self.flags) }
@@ -90,12 +97,31 @@ impl IoUringParams {
 
     #[inline]
     fn mmap(&self, fd: &Fd) -> Result<(sq::Queue, cq::Queue)> {
-        let sq_ring_sz =
+        let mut sq_ring_sz =
             self.sq_off.array as usize + self.sq_entries as usize * mem::size_of::<u32>();
-        let cq_ring_sz =
+        let mut cq_ring_sz =
             self.cq_off.cqes as usize + self.cq_entries as usize * mem::size_of::<cq::Entry>();
 
         let features = self.features();
+        if features.contains(IoRingFeat::SINGLE_MMAP) {
+            sq_ring_sz = cmp::max(sq_ring_sz, cq_ring_sz);
+            cq_ring_sz = sq_ring_sz;
+        }
+        let sq_ring_ptr = Rc::new(mmap::Pointer::try_new(
+            sq_ring_sz,
+            fd.as_raw_fd(),
+            Self::IORING_OFF_SQ_RING,
+        )?);
+        let cq_ring_ptr = if features.contains(IoRingFeat::SINGLE_MMAP) {
+            sq_ring_ptr.clone()
+        } else {
+            Rc::new(mmap::Pointer::try_new(
+                cq_ring_sz,
+                fd.as_raw_fd(),
+                Self::IORING_OFF_CQ_RING,
+            )?)
+        };
+        // TODO: mmap
         todo!()
     }
 }

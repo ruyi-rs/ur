@@ -134,3 +134,9 @@ pub unsafe fn mmap(
         Err(Error::last_os_error())
     }
 }
+
+#[inline]
+pub unsafe fn munmap(addr: *mut libc::c_void, len: usize) -> Result<()> {
+    let ret = libc::munmap(addr, len);
+    cvt(ret).and(Ok(()))
+}
