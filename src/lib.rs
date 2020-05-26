@@ -1,8 +1,9 @@
 mod params;
 mod sys2;
-mod syscall;
+mod sys;
 mod sq;
-mod cq;
+pub mod cq;
 mod uring;
 
-pub use uring::{IoUring, IoUringBuilder};
+pub use uring::IoUring;
+pub use params::IoUringBuilder;

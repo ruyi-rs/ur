@@ -1,6 +1,5 @@
 use std::fmt;
 use std::io::Result;
-use std::os::unix::io::RawFd;
 use std::ptr;
 
 use libc;
@@ -77,7 +76,7 @@ pub struct Queue {
 
 impl Queue {
 
-    pub fn try_new(ring_fd: RawFd, params: &IoUringParams) -> Result<Self> {
+    pub fn try_new(ring_fd: i32, params: &IoUringParams) -> Result<Self> {
         
         let q = Self {
             khead: ptr::null(),
