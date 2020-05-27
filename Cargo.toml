@@ -1,5 +1,5 @@
 [package]
-name = "iou"
+name = "ruyi-iou"
 version = "0.1.0"
 authors = ["Agemo Cui <agemo.git.cui@gmail.com>"]
 edition = "2018"
