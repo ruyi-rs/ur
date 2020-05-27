@@ -1,3 +1,6 @@
+use std::io::Result;
+use std::ptr;
+
 use crate::params::{IoRingSetup, IoUringBuilder};
 use crate::{cq, sq, sys};
 
@@ -19,7 +22,48 @@ impl Fd {
 impl Drop for Fd {
     #[inline]
     fn drop(&mut self) {
-        sys::close(self.0).ok();
+        unsafe {
+            sys::close(self.0).ok();
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Pointer<T> {
+    addr: ptr::NonNull<T>,
+    len: usize,
+}
+
+impl<T> Pointer<T> {
+    #[inline]
+    pub fn try_new(len: usize, fd: &Fd, offset: i64) -> Result<Self> {
+        let addr = unsafe {
+            let ptr = sys::mmap(
+                ptr::null_mut(),
+                len,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_SHARED | libc::MAP_POPULATE,
+                fd.as_raw_fd(),
+                offset,
+            )?;
+            ptr::NonNull::new_unchecked(ptr as *mut T)
+        };
+        Ok(Self { addr, len })
+    }
+
+    #[inline]
+    pub const fn as_ptr(&self) -> *mut T {
+        self.addr.as_ptr()
+    }
+}
+
+impl<T> Drop for Pointer<T> {
+    #[inline]
+    fn drop(&mut self) {
+        unsafe {
+            let ptr = self.addr.as_ptr() as *mut libc::c_void;
+            sys::munmap(ptr, self.len).ok();
+        }
     }
 }
 

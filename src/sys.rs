@@ -51,7 +51,7 @@ pub unsafe fn io_uring_register(
 
 // int __sys_io_uring_setup(unsigned entries, struct io_uring_params *p)
 #[inline]
-pub unsafe fn io_uring_setup(entries: u32, params: &mut IoUringParams) -> Result<i32> {
+pub(crate) unsafe fn io_uring_setup(entries: u32, params: &mut IoUringParams) -> Result<i32> {
     let ret = libc::syscall(__NR_io_uring_setup, entries, params) as i32;
     cvt(ret)
 }

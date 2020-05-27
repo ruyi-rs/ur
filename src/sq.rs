@@ -1,10 +1,30 @@
 use std::fmt;
-use std::io::Result;
-use std::ptr;
-
-use libc;
 
 use crate::params::IoUringParams;
+use crate::uring::Pointer;
+
+// Filled with the offset for mmap(2)
+// struct io_sqring_offsets
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct Offsets {
+    head: u32,
+    tail: u32,
+    ring_mask: u32,
+    ring_entries: u32,
+    flags: u32, // IoRingSq::* flags
+    dropped: u32,
+    array: u32,
+    _resv1: u32,
+    _resv2: u64,
+}
+
+impl Offsets {
+    #[inline]
+    pub fn array(&self) -> u32 {
+        self.array
+    }
+}
 
 #[allow(non_camel_case_types)]
 type __kernel_rwf_t = i32; // libc::c_int
@@ -37,7 +57,7 @@ impl fmt::Debug for OpFlags {
 // struct io_uring_sqe
 #[repr(C)]
 #[derive(Debug)]
-struct Entry {
+pub struct Entry {
     opcode: u8,              // type of operation for this sqe
     flags: u8,               // IOSQE_ flags (IoSqe::*)
     ioprio: u16,             // ioprio for the request
@@ -55,7 +75,6 @@ struct Entry {
     _pad2: [u64; 2],
 }
 
-
 #[derive(Debug)]
 pub struct Queue {
     khead: *const u32,
@@ -65,33 +84,37 @@ pub struct Queue {
     kflags: *const u32,
     kdropped: *const u32,
     array: *const u32,
-    sqes: *const Entry,
+    sqes: Pointer<Entry>,
 
     sqe_head: u32,
     sqe_tail: u32,
 
-    ring_sz: usize,
-    ring_ptr: *const libc::c_void, 
+    ring_ptr: Pointer<libc::c_void>,
 }
 
 impl Queue {
-
-    pub fn try_new(ring_fd: i32, params: &IoUringParams) -> Result<Self> {
-        
-        let q = Self {
-            khead: ptr::null(),
-            ktail: ptr::null_mut(),
-            kring_mask: ptr::null(),
-            kring_entries: ptr::null(),
-            kflags: ptr::null(),
-            kdropped: ptr::null(),
-            array: ptr::null(),
-            sqes: ptr::null(),
-            sqe_head: 0,
-            sqe_tail: 0,
-            ring_sz: 0,
-            ring_ptr: ptr::null(),
-        };
-        Ok(q)
+    #[inline]
+    pub(crate) fn new(
+        ring_ptr: Pointer<libc::c_void>,
+        sqes: Pointer<Entry>,
+        params: &IoUringParams,
+    ) -> Self {
+        let ptr = ring_ptr.as_ptr();
+        let sq_off = params.sq_off();
+        unsafe {
+            Self {
+                khead: ptr.add(sq_off.head as usize) as *const u32,
+                ktail: ptr.add(sq_off.tail as usize) as *mut u32,
+                kring_mask: ptr.add(sq_off.ring_mask as usize) as *const u32,
+                kring_entries: ptr.add(sq_off.ring_entries as usize) as *const u32,
+                kflags: ptr.add(sq_off.flags as usize) as *const u32,
+                kdropped: ptr.add(sq_off.dropped as usize) as *const u32,
+                array: ptr.add(sq_off.array as usize) as *const u32,
+                sqes,
+                sqe_head: 0,
+                sqe_tail: 0,
+                ring_ptr,
+            }
+        }
     }
 }

@@ -1,12 +1,11 @@
 use std::cmp;
 use std::io::Result;
 use std::mem::{self, MaybeUninit};
-use std::rc::Rc;
 
 use bitflags::bitflags;
 
-use crate::uring::{Fd, IoUring};
-use crate::{cq, mmap, sq, sys};
+use crate::uring::{Fd, IoUring, Pointer};
+use crate::{cq, sq, sys};
 
 // io_uring_setup() flags
 // IORING_SETUP_ flags
@@ -33,40 +32,11 @@ bitflags! {
     }
 }
 
-// Filled with the offset for mmap(2)
-// struct io_sqring_offsets
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-struct IoSqringOffsets {
-    head: u32,
-    tail: u32,
-    ring_mask: u32,
-    ring_entries: u32,
-    flags: u32, // IoRingSq::* flags
-    dropped: u32,
-    array: u32,
-    _resv1: u32,
-    _resv2: u64,
-}
-
-// struct io_cqring_offsets
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-struct IoCqringOffsets {
-    head: u32,
-    tail: u32,
-    ring_mask: u32,
-    ring_entries: u32,
-    overflow: u32,
-    cqes: u32,
-    _resv: u64,
-}
-
 // Passed in for io_uring_setup(2). Copied back with updated info on success
 // struct io_uring_params
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct IoUringParams {
+pub(crate) struct IoUringParams {
     sq_entries: u32,
     cq_entries: u32,
     flags: u32, // IORING_SETUP_ flags (IoRingSetup::*)
@@ -75,8 +45,8 @@ pub struct IoUringParams {
     features: u32, // IoRingFeat::* flags
     wq_fd: u32,
     _resv: [u32; 3],
-    sq_off: IoSqringOffsets,
-    cq_off: IoCqringOffsets,
+    sq_off: sq::Offsets,
+    cq_off: cq::Offsets,
 }
 
 impl IoUringParams {
@@ -96,33 +66,40 @@ impl IoUringParams {
     }
 
     #[inline]
-    fn mmap(&self, fd: &Fd) -> Result<(sq::Queue, cq::Queue)> {
-        let mut sq_ring_sz =
-            self.sq_off.array as usize + self.sq_entries as usize * mem::size_of::<u32>();
-        let mut cq_ring_sz =
-            self.cq_off.cqes as usize + self.cq_entries as usize * mem::size_of::<cq::Entry>();
+    pub const fn sq_off(&self) -> &sq::Offsets {
+        &self.sq_off
+    }
 
-        let features = self.features();
-        if features.contains(IoRingFeat::SINGLE_MMAP) {
-            sq_ring_sz = cmp::max(sq_ring_sz, cq_ring_sz);
-            cq_ring_sz = sq_ring_sz;
-        }
-        let sq_ring_ptr = Rc::new(mmap::Pointer::try_new(
-            sq_ring_sz,
-            fd.as_raw_fd(),
-            Self::IORING_OFF_SQ_RING,
-        )?);
-        let cq_ring_ptr = if features.contains(IoRingFeat::SINGLE_MMAP) {
-            sq_ring_ptr.clone()
+    #[inline]
+    pub fn cq_off(&self) -> &cq::Offsets {
+        &self.cq_off
+    }
+
+    #[inline]
+    fn mmap(&self, fd: &Fd) -> Result<(sq::Queue, cq::Queue)> {
+        let sq_ring_sz =
+            self.sq_off.array() as usize + self.sq_entries as usize * mem::size_of::<u32>();
+        let cq_ring_sz =
+            self.cq_off.cqes() as usize + self.cq_entries as usize * mem::size_of::<cq::Entry>();
+
+        let (sq_ring_ptr, cq_ring_ptr) = if self.features().contains(IoRingFeat::SINGLE_MMAP) {
+            let ring_sz = cmp::max(sq_ring_sz, cq_ring_sz);
+            let sq_ring_ptr =
+                Pointer::<libc::c_void>::try_new(ring_sz, &fd, Self::IORING_OFF_SQ_RING)?;
+            let cq_ring_ptr = cq::RingPtr::from_ref(&sq_ring_ptr);
+            (sq_ring_ptr, cq_ring_ptr)
         } else {
-            Rc::new(mmap::Pointer::try_new(
-                cq_ring_sz,
-                fd.as_raw_fd(),
-                Self::IORING_OFF_CQ_RING,
-            )?)
+            let sq_ring_ptr =
+                Pointer::<libc::c_void>::try_new(sq_ring_sz, &fd, Self::IORING_OFF_SQ_RING)?;
+            let cq_ring_ptr =
+                Pointer::<libc::c_void>::try_new(cq_ring_sz, &fd, Self::IORING_OFF_CQ_RING)?;
+            (sq_ring_ptr, cq::RingPtr::from_owned(cq_ring_ptr))
         };
-        // TODO: mmap
-        todo!()
+        let sqes_sz = self.sq_entries as usize * mem::size_of::<sq::Entry>();
+        let sqes = Pointer::<sq::Entry>::try_new(sqes_sz, &fd, Self::IORING_OFF_SQES)?;
+        let sq = sq::Queue::new(sq_ring_ptr, sqes, self);
+        let cq = cq::Queue::new(cq_ring_ptr, self);
+        Ok((sq, cq))
     }
 }
 

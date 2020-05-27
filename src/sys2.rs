@@ -305,7 +305,7 @@ unsafe fn io_uring_register(
 }
 
 #[inline]
-pub unsafe fn io_uring_setup(entries: u32, p: &mut params::IoUringParams) -> libc::c_int {
+pub(crate) unsafe fn io_uring_setup(entries: u32, p: &mut params::IoUringParams) -> libc::c_int {
     #[allow(non_upper_case_globals)]
     const __NR_io_uring_setup: libc::c_long = 426;
 
