@@ -1,7 +1,7 @@
 use std::fmt;
 
 use crate::params::UringParams;
-use crate::uring::Pointer;
+use crate::uring::Mmap;
 
 // Filled with the offset for mmap(2)
 // struct io_sqring_offsets
@@ -84,19 +84,19 @@ pub struct Queue {
     kflags: *const u32,
     kdropped: *const u32,
     array: *const u32,
-    sqes: Pointer<Entry>,
+    sqes: Mmap<Entry>,
 
     sqe_head: u32,
     sqe_tail: u32,
 
-    ring_ptr: Pointer<libc::c_void>,
+    ring_ptr: Mmap<libc::c_void>,
 }
 
 impl Queue {
     #[inline]
     pub(crate) fn new(
-        ring_ptr: Pointer<libc::c_void>,
-        sqes: Pointer<Entry>,
+        ring_ptr: Mmap<libc::c_void>,
+        sqes: Mmap<Entry>,
         params: &UringParams,
     ) -> Self {
         let ptr = ring_ptr.as_ptr();

@@ -29,12 +29,12 @@ impl Drop for Fd {
 }
 
 #[derive(Debug)]
-pub struct Pointer<T> {
+pub struct Mmap<T> {
     addr: ptr::NonNull<T>,
     len: usize,
 }
 
-impl<T> Pointer<T> {
+impl<T> Mmap<T> {
     #[inline]
     pub fn try_new(len: usize, fd: &Fd, offset: i64) -> Result<Self> {
         let addr = unsafe {
@@ -57,7 +57,7 @@ impl<T> Pointer<T> {
     }
 }
 
-impl<T> Drop for Pointer<T> {
+impl<T> Drop for Mmap<T> {
     #[inline]
     fn drop(&mut self) {
         unsafe {

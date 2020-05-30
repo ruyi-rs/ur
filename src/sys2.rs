@@ -308,7 +308,11 @@ pub(crate) unsafe fn io_uring_setup(entries: u32, p: *mut IoUringParams) -> libc
     #[allow(non_upper_case_globals)]
     const __NR_io_uring_setup: libc::c_long = 425;
 
-    libc::syscall(__NR_io_uring_setup, entries as libc::c_long, p as libc::c_long) as _
+    libc::syscall(
+        __NR_io_uring_setup,
+        entries as libc::c_long,
+        p as libc::c_long,
+    ) as _
 }
 
 #[inline]

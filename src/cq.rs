@@ -1,7 +1,7 @@
 use std::ptr::NonNull;
 
 use crate::params::UringParams;
-use crate::uring::Pointer;
+use crate::uring::Mmap;
 
 // struct io_cqring_offsets
 #[repr(C)]
@@ -37,25 +37,25 @@ pub struct Entry {
 
 #[derive(Debug)]
 pub(crate) enum RingPtr {
-    Ptr(NonNull<libc::c_void>),
-    Owned(Pointer<libc::c_void>),
+    Borrowed(NonNull<libc::c_void>),
+    Owned(Mmap<libc::c_void>),
 }
 
 impl RingPtr {
     #[inline]
-    pub const fn from_ref(ptr: &Pointer<libc::c_void>) -> Self {
-        RingPtr::Ptr(unsafe { NonNull::new_unchecked(ptr.as_ptr()) })
+    pub const fn from_borrowed(ptr: &Mmap<libc::c_void>) -> Self {
+        RingPtr::Borrowed(unsafe { NonNull::new_unchecked(ptr.as_ptr()) })
     }
 
     #[inline]
-    pub const fn from_owned(ptr: Pointer<libc::c_void>) -> Self {
+    pub const fn from_owned(ptr: Mmap<libc::c_void>) -> Self {
         RingPtr::Owned(ptr)
     }
 
     #[inline]
     fn as_ptr(&self) -> *mut libc::c_void {
         match *self {
-            Self::Ptr(p) => p.as_ptr(),
+            Self::Borrowed(p) => p.as_ptr(),
             Self::Owned(ref p) => p.as_ptr(),
         }
     }
