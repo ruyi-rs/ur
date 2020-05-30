@@ -4,13 +4,13 @@ use std::mem::{self, MaybeUninit};
 
 use bitflags::bitflags;
 
-use crate::uring::{Fd, IoUring, Pointer};
+use crate::uring::{Fd, Uring, Pointer};
 use crate::{cq, sq, sys};
 
 // io_uring_setup() flags
 // IORING_SETUP_ flags
 bitflags! {
-    pub struct IoRingSetup: u32 {
+    pub struct Setup: u32 {
         const IOPOLL    = 1 << 0; // io_context is polled
         const SQPOLL    = 1 << 1; // SQ poll thread
         const SQ_AFF    = 1 << 2; // sq_thread_cpu is valid
@@ -20,9 +20,9 @@ bitflags! {
     }
 }
 
-// IoUringParams->features flags
+// UringParams->features flags
 bitflags! {
-    pub struct IoRingFeat: u32 {
+    pub struct Feat: u32 {
         const SINGLE_MMAP       = 1 << 0;
         const NODROP            = 1 << 1;
         const SUBMIT_STABLE     = 1 << 2;
@@ -36,33 +36,33 @@ bitflags! {
 // struct io_uring_params
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub(crate) struct IoUringParams {
+pub(crate) struct UringParams {
     sq_entries: u32,
     cq_entries: u32,
-    flags: u32, // IORING_SETUP_ flags (IoRingSetup::*)
+    flags: u32, // IORING_SETUP_ flags (Setup::*)
     sq_thread_cpu: u32,
     sq_thread_idle: u32,
-    features: u32, // IoRingFeat::* flags
+    features: u32, // Feat::* flags
     wq_fd: u32,
     _resv: [u32; 3],
     sq_off: sq::Offsets,
     cq_off: cq::Offsets,
 }
 
-impl IoUringParams {
+impl UringParams {
     // Magic offsets for the application to mmap the data it needs
     const IORING_OFF_SQ_RING: i64 = 0;
     const IORING_OFF_CQ_RING: i64 = 0x800_0000;
     const IORING_OFF_SQES: i64 = 0x1000_0000;
 
     #[inline]
-    pub fn flags(&self) -> IoRingSetup {
-        unsafe { IoRingSetup::from_bits_unchecked(self.flags) }
+    pub fn flags(&self) -> Setup {
+        unsafe { Setup::from_bits_unchecked(self.flags) }
     }
 
     #[inline]
-    pub fn features(&self) -> IoRingFeat {
-        unsafe { IoRingFeat::from_bits_unchecked(self.features) }
+    pub fn features(&self) -> Feat {
+        unsafe { Feat::from_bits_unchecked(self.features) }
     }
 
     #[inline]
@@ -82,7 +82,7 @@ impl IoUringParams {
         let cq_ring_sz =
             self.cq_off.cqes() as usize + self.cq_entries as usize * mem::size_of::<cq::Entry>();
 
-        let (sq_ring_ptr, cq_ring_ptr) = if self.features().contains(IoRingFeat::SINGLE_MMAP) {
+        let (sq_ring_ptr, cq_ring_ptr) = if self.features().contains(Feat::SINGLE_MMAP) {
             let ring_sz = cmp::max(sq_ring_sz, cq_ring_sz);
             let sq_ring_ptr =
                 Pointer::<libc::c_void>::try_new(ring_sz, &fd, Self::IORING_OFF_SQ_RING)?;
@@ -104,22 +104,22 @@ impl IoUringParams {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct IoUringBuilder {
+pub struct UringBuilder {
     entries: u32,
     cq_entries: u32,
-    flags: IoRingSetup,
+    flags: Setup,
     sq_thread_cpu: u32,
     sq_thread_idle: u32,
     wq_fd: u32,
 }
 
-impl IoUringBuilder {
+impl UringBuilder {
     #[inline]
     pub(crate) const fn new(entries: u32) -> Self {
         Self {
             entries,
             cq_entries: 0,
-            flags: IoRingSetup::empty(),
+            flags: Setup::empty(),
             sq_thread_cpu: 0,
             sq_thread_idle: 0,
             wq_fd: 0,
@@ -128,13 +128,13 @@ impl IoUringBuilder {
 
     #[inline]
     pub fn iopoll(&mut self) -> &mut Self {
-        self.flags |= IoRingSetup::IOPOLL;
+        self.flags |= Setup::IOPOLL;
         self
     }
 
     #[inline]
     pub fn sqpoll(&mut self) -> &mut Self {
-        self.flags |= IoRingSetup::SQPOLL;
+        self.flags |= Setup::SQPOLL;
         self
     }
 
@@ -148,42 +148,42 @@ impl IoUringBuilder {
     #[inline]
     pub fn sqpoll_cpu(&mut self, cpu: u32) -> &mut Self {
         self.sqpoll();
-        self.flags |= IoRingSetup::SQ_AFF;
+        self.flags |= Setup::SQ_AFF;
         self.sq_thread_cpu = cpu;
         self
     }
 
     #[inline]
     pub fn cqsize(&mut self, cq_entries: u32) -> &mut Self {
-        self.flags |= IoRingSetup::CQSIZE;
+        self.flags |= Setup::CQSIZE;
         self.cq_entries = cq_entries;
         self
     }
 
     #[inline]
     pub fn clamp(&mut self) -> &mut Self {
-        self.flags |= IoRingSetup::CLAMP;
+        self.flags |= Setup::CLAMP;
         self
     }
 
     #[inline]
     pub fn attach_wq(&mut self, wq_fd: u32) -> &mut Self {
-        self.flags |= IoRingSetup::ATTACH_WQ;
+        self.flags |= Setup::ATTACH_WQ;
         self.wq_fd = wq_fd;
         self
     }
 
-    pub fn try_build(&self) -> Result<IoUring> {
+    pub fn try_build(&self) -> Result<Uring> {
         let mut params = self.params();
         let fd = self.setup(&mut params)?;
         let (sq, cq) = params.mmap(&fd)?;
-        let uring = IoUring::new(sq, cq, params.flags(), fd);
+        let uring = Uring::new(sq, cq, params.flags(), fd);
         Ok(uring)
     }
 
     #[inline]
-    fn params(&self) -> IoUringParams {
-        let mut params: IoUringParams = unsafe { MaybeUninit::zeroed().assume_init() };
+    fn params(&self) -> UringParams {
+        let mut params: UringParams = unsafe { MaybeUninit::zeroed().assume_init() };
         params.cq_entries = self.cq_entries;
         params.flags = self.flags.bits();
         params.sq_thread_cpu = self.sq_thread_cpu;
@@ -193,7 +193,7 @@ impl IoUringBuilder {
     }
 
     #[inline]
-    fn setup(&self, params: &mut IoUringParams) -> Result<Fd> {
+    fn setup(&self, params: &mut UringParams) -> Result<Fd> {
         let fd = unsafe { sys::io_uring_setup(self.entries, params)? };
         Ok(Fd::new(fd))
     }

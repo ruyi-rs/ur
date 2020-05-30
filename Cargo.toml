@@ -15,5 +15,7 @@ include = ["Cargo.toml", "src/**/*.rs", "README.md", "LICENSE-APACHE", "LICENSE-
 
 [dependencies]
 libc = "0.2"
-ruyi-slab = "0.1"
 bitflags = "1.2"
+thiserror = "1.0"
+ruyi-slab = "0.1"
+

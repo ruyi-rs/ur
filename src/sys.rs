@@ -4,16 +4,16 @@ use std::ptr;
 
 use libc;
 
-use crate::params::IoUringParams;
+use crate::params::UringParams;
 
 #[allow(non_upper_case_globals)]
-const __NR_io_uring_register: libc::c_long = 425;
+const __NR_io_uring_setup: libc::c_long = 425;
 
 #[allow(non_upper_case_globals)]
-const __NR_io_uring_setup: libc::c_long = 426;
+const __NR_io_uring_enter: libc::c_long = 426;
 
 #[allow(non_upper_case_globals)]
-const __NR_io_uring_enter: libc::c_long = 427;
+const __NR_io_uring_register: libc::c_long = 427;
 
 // io_uring_register(2) opcodes and arguments
 const IORING_REGISTER_BUFFERS: libc::c_uint = 0;
@@ -37,7 +37,18 @@ fn cvt(ret: i32) -> Result<i32> {
     }
 }
 
-// int __sys_io_uring_register(int fd, unsigned opcode, const void *arg, unsigned nr_args)
+// int io_uring_setup(u32 entries, struct io_uring_params *p);
+#[inline]
+pub(crate) unsafe fn io_uring_setup(entries: u32, params: &mut UringParams) -> Result<i32> {
+    let ret = libc::syscall(
+        __NR_io_uring_setup,
+        entries as libc::c_long,
+        params as *mut UringParams as libc::c_long,
+    ) as i32;
+    cvt(ret)
+}
+
+// int io_uring_register(unsigned int fd, unsigned int opcode, void *arg, unsigned int nr_args);
 #[inline]
 pub unsafe fn io_uring_register(
     fd: libc::c_int,
@@ -45,15 +56,14 @@ pub unsafe fn io_uring_register(
     arg: *const libc::c_void,
     nr_args: libc::c_uint,
 ) -> Result<()> {
-    let ret = libc::syscall(__NR_io_uring_register, fd, opcode, arg, nr_args) as libc::c_int;
+    let ret = libc::syscall(
+        __NR_io_uring_register,
+        fd as libc::c_long,
+        opcode as libc::c_long,
+        arg as libc::c_long,
+        nr_args as libc::c_long,
+    ) as libc::c_int;
     cvt(ret).and(Ok(()))
-}
-
-// int __sys_io_uring_setup(unsigned entries, struct io_uring_params *p)
-#[inline]
-pub(crate) unsafe fn io_uring_setup(entries: u32, params: &mut IoUringParams) -> Result<i32> {
-    let ret = libc::syscall(__NR_io_uring_setup, entries, params) as i32;
-    cvt(ret)
 }
 
 #[inline]
@@ -73,6 +83,7 @@ pub fn io_uring_unregister_buffers(fd: i32) -> Result<()> {
     unsafe { io_uring_register(fd, IORING_UNREGISTER_BUFFERS, ptr::null(), 0) }
 }
 
+// int io_uring_enter(unsigned int fd, unsigned int to_submit, unsigned int min_complete, unsigned int flags, sigset_t *sig);
 #[inline]
 pub unsafe fn io_uring_enter(
     fd: i32,
@@ -82,12 +93,12 @@ pub unsafe fn io_uring_enter(
 ) -> Result<usize> {
     let n = libc::syscall(
         __NR_io_uring_enter,
-        fd,
-        to_submit,
-        min_complete,
-        flags,
-        ptr::null::<libc::sigset_t>(),
-        0,
+        fd as libc::c_long,
+        to_submit as libc::c_long,
+        min_complete as libc::c_long,
+        flags as libc::c_long,
+        ptr::null::<libc::sigset_t>() as libc::c_long,
+        0 as libc::c_long,
     ) as i32;
     cvt(n).and(Ok(n as usize))
 }
@@ -102,12 +113,12 @@ pub unsafe fn io_uring_penter(
 ) -> Result<usize> {
     let n = libc::syscall(
         __NR_io_uring_enter,
-        fd,
-        to_submit,
-        min_complete,
-        flags,
-        sig,
-        mem::size_of::<libc::sigset_t>(),
+        fd as libc::c_long,
+        to_submit as libc::c_long,
+        min_complete as libc::c_long,
+        flags as libc::c_long,
+        sig as *const libc::sigset_t as libc::c_long,
+        mem::size_of::<libc::sigset_t>() as libc::c_long,
     ) as i32;
     cvt(n).and(Ok(n as usize))
 }

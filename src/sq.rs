@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::params::IoUringParams;
+use crate::params::UringParams;
 use crate::uring::Pointer;
 
 // Filled with the offset for mmap(2)
@@ -97,7 +97,7 @@ impl Queue {
     pub(crate) fn new(
         ring_ptr: Pointer<libc::c_void>,
         sqes: Pointer<Entry>,
-        params: &IoUringParams,
+        params: &UringParams,
     ) -> Self {
         let ptr = ring_ptr.as_ptr();
         let sq_off = params.sq_off();

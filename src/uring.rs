@@ -1,7 +1,7 @@
 use std::io::Result;
 use std::ptr;
 
-use crate::params::{IoRingSetup, IoUringBuilder};
+use crate::params::{Setup, UringBuilder};
 use crate::{cq, sq, sys};
 
 #[derive(Debug)]
@@ -68,21 +68,21 @@ impl<T> Drop for Pointer<T> {
 }
 
 #[derive(Debug)]
-pub struct IoUring {
+pub struct Uring {
     sq: sq::Queue,
     cq: cq::Queue,
-    flags: IoRingSetup,
+    flags: Setup,
     fd: Fd,
 }
 
-impl IoUring {
+impl Uring {
     #[inline]
-    pub(crate) fn new(sq: sq::Queue, cq: cq::Queue, flags: IoRingSetup, fd: Fd) -> Self {
+    pub(crate) fn new(sq: sq::Queue, cq: cq::Queue, flags: Setup, fd: Fd) -> Self {
         Self { sq, cq, flags, fd }
     }
 
     #[inline]
-    pub const fn entries(entries: u32) -> IoUringBuilder {
-        IoUringBuilder::new(entries)
+    pub const fn entries(entries: u32) -> UringBuilder {
+        UringBuilder::new(entries)
     }
 }

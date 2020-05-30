@@ -1,7 +1,7 @@
-use ruyi_iou::IoUring;
+use ruyi_iou::Uring;
 
 #[test]
 fn build_io_uring() {
-    let uring = IoUring::entries(1).try_build().unwrap();
+    let uring = Uring::entries(4).try_build().unwrap();
     println!("{:?}", uring);
 }

@@ -1,6 +1,6 @@
 use std::ptr::NonNull;
 
-use crate::params::IoUringParams;
+use crate::params::UringParams;
 use crate::uring::Pointer;
 
 // struct io_cqring_offsets
@@ -76,7 +76,7 @@ pub(crate) struct Queue {
 
 impl Queue {
     #[inline]
-    pub fn new(ring_ptr: RingPtr, params: &IoUringParams) -> Self {
+    pub fn new(ring_ptr: RingPtr, params: &UringParams) -> Self {
         let ptr = ring_ptr.as_ptr();
         let cq_off = params.cq_off();
         unsafe {

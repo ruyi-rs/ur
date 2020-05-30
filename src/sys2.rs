@@ -4,8 +4,6 @@ use std::{fmt, mem};
 use bitflags::bitflags;
 use libc;
 
-use crate::params;
-
 #[allow(non_camel_case_types)]
 pub type __kernel_rwf_t = libc::c_int;
 
@@ -171,7 +169,7 @@ pub const IORING_OFF_SQES: usize = 0x1000_0000;
 // Filled with the offset for mmap(2)
 // struct io_sqring_offsets
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Default, Debug, Copy, Clone)]
 pub struct IoSqringOffsets {
     pub head: libc::__u32,
     pub tail: libc::__u32,
@@ -192,7 +190,7 @@ bitflags! {
 }
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Default, Debug, Copy, Clone)]
 // struct io_cqring_offsets
 pub struct IoCqringOffsets {
     pub head: libc::__u32,
@@ -201,6 +199,8 @@ pub struct IoCqringOffsets {
     pub ring_entries: libc::__u32,
     pub overflow: libc::__u32,
     pub cqes: libc::__u32,
+    pub flags: libc::__u32,
+    _resv1: libc::__u32,
     _resv: libc::__u64,
 }
 
@@ -215,7 +215,7 @@ bitflags! {
 // Passed in for io_uring_setup(2). Copied back with updated info on success
 // struct io_uring_params
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Default, Debug, Copy, Clone)]
 pub struct IoUringParams {
     pub sq_entries: libc::__u32,
     pub cq_entries: libc::__u32,
@@ -299,17 +299,16 @@ unsafe fn io_uring_register(
     nr_args: libc::c_uint,
 ) -> libc::c_int {
     #[allow(non_upper_case_globals)]
-    const __NR_io_uring_register: libc::c_long = 425;
+    const __NR_io_uring_register: libc::c_long = 426;
 
     libc::syscall(__NR_io_uring_register, fd, opcode, arg, nr_args) as libc::c_int
 }
 
-#[inline]
-pub(crate) unsafe fn io_uring_setup(entries: u32, p: &mut params::IoUringParams) -> libc::c_int {
+pub(crate) unsafe fn io_uring_setup(entries: u32, p: *mut IoUringParams) -> libc::c_int {
     #[allow(non_upper_case_globals)]
-    const __NR_io_uring_setup: libc::c_long = 426;
+    const __NR_io_uring_setup: libc::c_long = 425;
 
-    libc::syscall(__NR_io_uring_setup, entries as libc::c_uint, p) as libc::c_int
+    libc::syscall(__NR_io_uring_setup, entries as libc::c_long, p as libc::c_long) as _
 }
 
 #[inline]
