@@ -1,4 +1,5 @@
-use std::io::Result;
+use std::fs::File;
+use std::io::{IoSlice, Result};
 use std::ptr;
 
 use crate::params::{Setup, UringBuilder};
@@ -76,6 +77,19 @@ pub struct Uring {
 }
 
 impl Uring {
+    // io_uring_register(2) opcodes and arguments
+    const IORING_REGISTER_BUFFERS: libc::c_uint = 0;
+    const IORING_UNREGISTER_BUFFERS: libc::c_uint = 1;
+    const IORING_REGISTER_FILES: libc::c_uint = 2;
+    const IORING_UNREGISTER_FILES: libc::c_uint = 3;
+    const IORING_REGISTER_EVENTFD: libc::c_uint = 4;
+    const IORING_UNREGISTER_EVENTFD: libc::c_uint = 5;
+    const IORING_REGISTER_FILES_UPDATE: libc::c_uint = 6;
+    const IORING_REGISTER_EVENTFD_ASYNC: libc::c_uint = 7;
+    const IORING_REGISTER_PROBE: libc::c_uint = 8;
+    const IORING_REGISTER_PERSONALITY: libc::c_uint = 9;
+    const IORING_UNREGISTER_PERSONALITY: libc::c_uint = 10;
+
     #[inline]
     pub(crate) fn new(sq: sq::Queue, cq: cq::Queue, flags: Setup, fd: Fd) -> Self {
         Self { sq, cq, flags, fd }
@@ -84,5 +98,39 @@ impl Uring {
     #[inline]
     pub const fn entries(entries: u32) -> UringBuilder {
         UringBuilder::new(entries)
+    }
+
+    #[inline]
+    pub fn register_buffers(&self, bufs: &[IoSlice]) -> Result<()> {
+        unsafe {
+            sys::io_uring_register(
+                self.fd.as_raw_fd(),
+                Self::IORING_REGISTER_BUFFERS,
+                bufs.as_ptr() as *const _,
+                bufs.len() as u32,
+            )
+        }
+    }
+
+    #[inline]
+    pub fn unregister_buffers(&self) -> Result<()> {
+        unsafe {
+            sys::io_uring_register(
+                self.fd.as_raw_fd(),
+                Self::IORING_UNREGISTER_BUFFERS,
+                ptr::null(),
+                0,
+            )
+        }
+    }
+
+    #[inline]
+    pub fn register_files(&self, files: &[&File]) -> Result<()> {
+        todo!()
+    }
+
+    #[inline]
+    pub fn unregister_files(&self) -> Result<()> {
+        todo!()
     }
 }
