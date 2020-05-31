@@ -1,5 +1,6 @@
-use std::io::{Error, IoSlice, Result};
+use std::io::{Error, Result};
 use std::mem;
+use std::os::unix::io::RawFd;
 use std::ptr;
 
 use libc;
@@ -26,7 +27,7 @@ fn cvt(ret: i32) -> Result<i32> {
 
 // int io_uring_setup(u32 entries, struct io_uring_params *p);
 #[inline]
-pub(crate) unsafe fn io_uring_setup(entries: u32, params: &mut UringParams) -> Result<i32> {
+pub(crate) unsafe fn io_uring_setup(entries: u32, params: &mut UringParams) -> Result<RawFd> {
     let ret = libc::syscall(
         __NR_io_uring_setup,
         entries as libc::c_long,
@@ -37,7 +38,12 @@ pub(crate) unsafe fn io_uring_setup(entries: u32, params: &mut UringParams) -> R
 
 // int io_uring_register(unsigned int fd, unsigned int opcode, void *arg, unsigned int nr_args);
 #[inline]
-pub unsafe fn io_uring_register(fd: i32, opcode: u32, arg: *const u8, nr_args: u32) -> Result<()> {
+pub unsafe fn io_uring_register(
+    fd: RawFd,
+    opcode: u32,
+    arg: *const u8,
+    nr_args: u32,
+) -> Result<()> {
     let ret = libc::syscall(
         __NR_io_uring_register,
         fd as libc::c_long,
@@ -51,7 +57,7 @@ pub unsafe fn io_uring_register(fd: i32, opcode: u32, arg: *const u8, nr_args: u
 // int io_uring_enter(unsigned int fd, unsigned int to_submit, unsigned int min_complete, unsigned int flags, sigset_t *sig);
 #[inline]
 pub unsafe fn io_uring_enter(
-    fd: i32,
+    fd: RawFd,
     to_submit: u32,
     min_complete: u32,
     flags: u32,
@@ -70,7 +76,7 @@ pub unsafe fn io_uring_enter(
 
 #[inline]
 pub unsafe fn io_uring_penter(
-    fd: i32,
+    fd: RawFd,
     to_submit: u32,
     min_complete: u32,
     flags: u32,
@@ -89,7 +95,7 @@ pub unsafe fn io_uring_penter(
 }
 
 #[inline]
-pub unsafe fn close(fd: i32) -> Result<()> {
+pub unsafe fn close(fd: RawFd) -> Result<()> {
     let ret = libc::close(fd);
     cvt(ret).and(Ok(()))
 }
@@ -100,7 +106,7 @@ pub unsafe fn mmap(
     len: usize,
     prot: i32,
     flags: i32,
-    fd: i32,
+    fd: RawFd,
     offset: i64,
 ) -> Result<*mut libc::c_void> {
     let ptr = libc::mmap(addr, len, prot, flags, fd, offset);

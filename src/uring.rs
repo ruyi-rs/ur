@@ -1,21 +1,23 @@
-use std::fs::File;
 use std::io::{IoSlice, Result};
+use std::os::unix::io::{AsRawFd, RawFd};
 use std::ptr;
 
 use crate::params::{Setup, UringBuilder};
 use crate::{cq, sq, sys};
 
 #[derive(Debug)]
-pub struct Fd(i32);
+pub struct Fd(RawFd);
 
 impl Fd {
     #[inline]
-    pub const fn new(fd: i32) -> Self {
+    pub const fn new(fd: RawFd) -> Self {
         Self(fd)
     }
+}
 
+impl AsRawFd for Fd {
     #[inline]
-    pub fn as_raw_fd(&self) -> i32 {
+    fn as_raw_fd(&self) -> i32 {
         self.0
     }
 }
@@ -125,12 +127,26 @@ impl Uring {
     }
 
     #[inline]
-    pub fn register_files(&self, files: &[&File]) -> Result<()> {
-        todo!()
+    pub fn register_files(&self, fds: &[RawFd]) -> Result<()> {
+        unsafe {
+            sys::io_uring_register(
+                self.fd.as_raw_fd(),
+                Self::IORING_REGISTER_FILES,
+                fds.as_ptr() as *const _,
+                fds.len() as u32,
+            )
+        }
     }
 
     #[inline]
     pub fn unregister_files(&self) -> Result<()> {
-        todo!()
+        unsafe {
+            sys::io_uring_register(
+                self.fd.as_raw_fd(),
+                Self::IORING_UNREGISTER_FILES,
+                ptr::null(),
+                0,
+            )
+        }
     }
 }
