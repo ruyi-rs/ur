@@ -1,9 +1,8 @@
-pub mod cq;
-mod params;
-mod sq;
 mod sys;
-mod sys2;
+pub mod cq;
+mod sq;
+mod params;
 mod uring;
 
 pub use params::UringBuilder;
-pub use uring::Uring;
+pub use uring::{Uring, Op};

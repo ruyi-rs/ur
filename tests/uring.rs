@@ -1,7 +1,9 @@
-use ruyi_iou::Uring;
+use ruyi_iou::{Op, Uring};
 
 #[test]
-fn build_io_uring() {
+fn uring_ops() {
     let uring = Uring::entries(4).try_build().unwrap();
-    println!("{:?}", uring);
+    let probe = uring.probe().unwrap();
+
+    assert!(Op::Nop.is_supported(&probe))
 }
