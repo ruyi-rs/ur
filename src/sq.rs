@@ -1,4 +1,5 @@
 use std::fmt;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::params::UringParams;
 use crate::uring::Mmap;
@@ -77,14 +78,16 @@ pub struct Entry {
 
 #[derive(Debug)]
 pub struct Queue {
-    khead: *const u32,
-    ktail: *mut u32,
-    kring_mask: *const u32,
-    kring_entries: *const u32,
-    kflags: *const u32,
+    khead: &'static AtomicU32,
+    ktail: &'static AtomicU32,
+    kring_mask: u32,
+    kring_entries: u32,
+    kflags: &'static AtomicU32,
     kdropped: *const u32,
     array: *const u32,
     sqes: Mmap<Entry>,
+
+    khead_shadow: u32,
 
     sqe_head: u32,
     sqe_tail: u32,
@@ -103,18 +106,33 @@ impl Queue {
         let sq_off = params.sq_off();
         unsafe {
             Self {
-                khead: ptr.add(sq_off.head as usize) as *const u32,
-                ktail: ptr.add(sq_off.tail as usize) as *mut u32,
-                kring_mask: ptr.add(sq_off.ring_mask as usize) as *const u32,
-                kring_entries: ptr.add(sq_off.ring_entries as usize) as *const u32,
-                kflags: ptr.add(sq_off.flags as usize) as *const u32,
+                khead: &*(ptr.add(sq_off.head as usize) as *const AtomicU32),
+                ktail: &*(ptr.add(sq_off.tail as usize) as *const AtomicU32),
+                kring_mask: *(ptr.add(sq_off.ring_mask as usize) as *const u32),
+                kring_entries: *(ptr.add(sq_off.ring_entries as usize) as *const u32),
+                kflags: &*(ptr.add(sq_off.flags as usize) as *const AtomicU32),
                 kdropped: ptr.add(sq_off.dropped as usize) as *const u32,
                 array: ptr.add(sq_off.array as usize) as *const u32,
                 sqes,
+                khead_shadow: 0,
                 sqe_head: 0,
                 sqe_tail: 0,
                 ring_ptr,
             }
         }
+    }
+
+    #[inline]
+    pub(crate) fn vacate_entry(&mut self) -> Option<&mut Entry> {
+        if self.sqe_tail.wrapping_sub(self.khead_shadow) == self.kring_entries {
+            self.khead_shadow = self.khead.load(Ordering::Acquire);
+            if self.sqe_tail.wrapping_sub(self.khead_shadow) == self.kring_entries {
+                return None;
+            }
+        }
+        let count = (self.sqe_tail & self.kring_mask) as usize;
+        self.sqe_tail = self.sqe_tail.wrapping_add(1);
+        let entry = unsafe { &mut *(self.sqes.as_ptr().add(count)) };
+        Some(entry)
     }
 }

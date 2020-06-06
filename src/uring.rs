@@ -339,4 +339,9 @@ impl Uring {
         }
         Ok(probe)
     }
+
+    #[inline]
+    fn prep_rw(&mut self, op: i32, fd: RawFd, addr: *const libc::c_void, len: u32) -> bool {
+        todo!()
+    }
 }
