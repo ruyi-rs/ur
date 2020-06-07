@@ -1,8 +1,9 @@
 use std::fmt;
+use std::os::unix::io::RawFd;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::params::UringParams;
-use crate::uring::Mmap;
+use crate::uring::{Mmap, Op};
 
 // Filled with the offset for mmap(2)
 // struct io_sqring_offsets
@@ -76,6 +77,23 @@ pub struct Entry {
     _pad2: [u64; 2],
 }
 
+impl Entry {
+    #[inline]
+    pub(crate) fn set_splice_off_in(&mut self, splice_off_in: u64) {
+        self.addr_splice_off_in = splice_off_in;
+    }
+
+    #[inline]
+    pub(crate) fn set_splice_fd_in(&mut self, splice_fd_in: RawFd) {
+        self.splice_fd_in = splice_fd_in;
+    }
+
+    #[inline]
+    pub(crate) fn set_splice_flags(&mut self, splice_flags: u32) {
+        self.op_flags.splice = splice_flags;
+    }
+}
+
 #[derive(Debug)]
 pub struct Queue {
     khead: &'static AtomicU32,
@@ -123,7 +141,7 @@ impl Queue {
     }
 
     #[inline]
-    pub(crate) fn vacate_entry(&mut self) -> Option<&mut Entry> {
+    fn vacate_entry(&mut self) -> Option<&mut Entry> {
         if self.sqe_tail.wrapping_sub(self.khead_shadow) == self.kring_entries {
             self.khead_shadow = self.khead.load(Ordering::Acquire);
             if self.sqe_tail.wrapping_sub(self.khead_shadow) == self.kring_entries {
@@ -134,5 +152,36 @@ impl Queue {
         self.sqe_tail = self.sqe_tail.wrapping_add(1);
         let entry = unsafe { &mut *(self.sqes.as_ptr().add(count)) };
         Some(entry)
+    }
+
+    #[inline]
+    pub(crate) fn prep_rw(
+        &mut self,
+        op: Op,
+        fd: RawFd,
+        addr: *const libc::c_void,
+        len: u32,
+        offset: u64,
+    ) -> Option<&mut Entry> {
+        match self.vacate_entry() {
+            Some(sqe) => {
+                sqe.opcode = op as u8;
+                sqe.flags = 0;
+                sqe.ioprio = 0;
+                sqe.fd = fd;
+                sqe.off_addr2 = offset;
+                sqe.addr_splice_off_in = addr as u64;
+                sqe.len = len;
+                sqe.op_flags.rw = 0;
+                sqe.user_data = 0;
+                sqe.buf_index_group = 0;
+                sqe.personality = 0;
+                sqe.splice_fd_in = 0;
+                sqe._pad2[0] = 0;
+                sqe._pad2[1] = 0;
+                Some(sqe)
+            }
+            None => None,
+        }
     }
 }

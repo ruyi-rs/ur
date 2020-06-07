@@ -42,9 +42,6 @@ pub enum Op {
     Splice,
     ProvideBuffers,
     RemoveBuffers,
-
-    // this goes last, obviously
-    Last,
 }
 
 impl Op {
@@ -341,7 +338,39 @@ impl Uring {
     }
 
     #[inline]
-    fn prep_rw(&mut self, op: i32, fd: RawFd, addr: *const libc::c_void, len: u32) -> bool {
-        todo!()
+    pub fn prep_splice(
+        &mut self,
+        fd_in: RawFd,
+        off_in: u64,
+        fd_out: RawFd,
+        off_out: u64,
+        nbytes: u32,
+        splice_flags: u32,
+    ) -> bool {
+        match self
+            .sq
+            .prep_rw(Op::Splice, fd_out, ptr::null(), nbytes, off_out)
+        {
+            Some(sqe) => {
+                sqe.set_splice_off_in(off_in);
+                sqe.set_splice_fd_in(fd_in);
+                sqe.set_splice_flags(splice_flags);
+                true
+            }
+            None => false,
+        }
+    }
+
+    #[inline]
+    pub fn prep_readv(&mut self, fd: RawFd, iovecs: &[IoSlice], offset: u64) -> bool {
+        self.sq
+            .prep_rw(
+                Op::Readv,
+                fd,
+                iovecs.as_ptr() as *const _,
+                iovecs.len() as u32,
+                offset,
+            )
+            .is_some()
     }
 }
