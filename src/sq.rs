@@ -1,5 +1,6 @@
 use std::fmt;
 use std::os::unix::io::RawFd;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::params::UringParams;
@@ -89,6 +90,71 @@ impl Entry {
     }
 
     #[inline]
+    pub(crate) fn set_buf_index(&mut self, buf_index: u16) {
+        self.buf_index_group = buf_index;
+    }
+
+    #[inline]
+    pub(crate) fn set_buf_group(&mut self, buf_group: u16) {
+        self.buf_index_group = buf_group;
+    }
+
+    #[inline]
+    pub(crate) fn set_rw_flags(&mut self, rw_flags: i32) {
+        self.op_flags.rw = rw_flags;
+    }
+
+    #[inline]
+    pub(crate) fn set_fsync_flags(&mut self, fsync_flags: u32) {
+        self.op_flags.fsync = fsync_flags;
+    }
+
+    #[inline]
+    pub(crate) fn set_poll_events(&mut self, poll_events: u16) {
+        self.op_flags.poll_events = poll_events;
+    }
+
+    #[inline]
+    pub(crate) fn set_sync_range_flags(&mut self, sync_rang_flags: u32) {
+        self.op_flags.sync_range = sync_rang_flags;
+    }
+
+    #[inline]
+    pub(crate) fn set_msg_flags(&mut self, msg_flags: u32) {
+        self.op_flags.msg = msg_flags;
+    }
+
+    #[inline]
+    pub(crate) fn set_timeout_flags(&mut self, timeout_flags: u32) {
+        self.op_flags.timeout = timeout_flags;
+    }
+
+    #[inline]
+    pub(crate) fn set_accept_flags(&mut self, accept_flags: u32) {
+        self.op_flags.accept = accept_flags;
+    }
+
+    #[inline]
+    pub(crate) fn set_cancel_flags(&mut self, cancel_flags: u32) {
+        self.op_flags.cancel = cancel_flags;
+    }
+
+    #[inline]
+    pub(crate) fn set_open_flags(&mut self, open_flags: u32) {
+        self.op_flags.open = open_flags;
+    }
+
+    #[inline]
+    pub(crate) fn set_statx_flags(&mut self, statx_flags: u32) {
+        self.op_flags.statx = statx_flags;
+    }
+
+    #[inline]
+    pub(crate) fn set_fadvise_advice_flags(&mut self, fadvise_advice_flags: u32) {
+        self.op_flags.fadvise_advice = fadvise_advice_flags;
+    }
+
+    #[inline]
     pub(crate) fn set_splice_flags(&mut self, splice_flags: u32) {
         self.op_flags.splice = splice_flags;
     }
@@ -110,13 +176,13 @@ pub struct Queue {
     sqe_head: u32,
     sqe_tail: u32,
 
-    ring_ptr: Mmap<libc::c_void>,
+    ring_ptr: Rc<Mmap<libc::c_void>>,
 }
 
 impl Queue {
     #[inline]
     pub(crate) fn new(
-        ring_ptr: Mmap<libc::c_void>,
+        ring_ptr: Rc<Mmap<libc::c_void>>,
         sqes: Mmap<Entry>,
         params: &UringParams,
     ) -> Self {

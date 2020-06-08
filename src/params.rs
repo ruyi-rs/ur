@@ -1,6 +1,7 @@
 use std::cmp;
 use std::io::Result;
 use std::mem::{self, MaybeUninit};
+use std::rc::Rc;
 
 use bitflags::bitflags;
 
@@ -84,16 +85,25 @@ impl UringParams {
 
         let (sq_ring_ptr, cq_ring_ptr) = if self.features().contains(Feat::SINGLE_MMAP) {
             let ring_sz = cmp::max(sq_ring_sz, cq_ring_sz);
-            let sq_ring_ptr =
-                Mmap::<libc::c_void>::try_new(ring_sz, &fd, Self::IORING_OFF_SQ_RING)?;
-            let cq_ring_ptr = cq::RingPtr::from_borrowed(&sq_ring_ptr);
+            let sq_ring_ptr = Rc::new(Mmap::<libc::c_void>::try_new(
+                ring_sz,
+                &fd,
+                Self::IORING_OFF_SQ_RING,
+            )?);
+            let cq_ring_ptr = sq_ring_ptr.clone();
             (sq_ring_ptr, cq_ring_ptr)
         } else {
-            let sq_ring_ptr =
-                Mmap::<libc::c_void>::try_new(sq_ring_sz, &fd, Self::IORING_OFF_SQ_RING)?;
-            let cq_ring_ptr =
-                Mmap::<libc::c_void>::try_new(cq_ring_sz, &fd, Self::IORING_OFF_CQ_RING)?;
-            (sq_ring_ptr, cq::RingPtr::from_owned(cq_ring_ptr))
+            let sq_ring_ptr = Rc::new(Mmap::<libc::c_void>::try_new(
+                sq_ring_sz,
+                &fd,
+                Self::IORING_OFF_SQ_RING,
+            )?);
+            let cq_ring_ptr = Rc::new(Mmap::<libc::c_void>::try_new(
+                cq_ring_sz,
+                &fd,
+                Self::IORING_OFF_CQ_RING,
+            )?);
+            (sq_ring_ptr, cq_ring_ptr)
         };
         let sqes_sz = self.sq_entries as usize * mem::size_of::<sq::Entry>();
         let sqes = Mmap::<sq::Entry>::try_new(sqes_sz, &fd, Self::IORING_OFF_SQES)?;

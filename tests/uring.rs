@@ -1,7 +1,7 @@
 use ruyi_iou::{Op, Uring};
 
 #[test]
-fn uring_ops() {
+fn uring_probe() {
     let uring = Uring::entries(4).try_build().unwrap();
     let probe = uring.probe().unwrap();
 

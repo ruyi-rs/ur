@@ -5,4 +5,4 @@ mod sys;
 mod uring;
 
 pub use params::UringBuilder;
-pub use uring::{Op, Uring};
+pub use uring::{Op, OpenHow, Uring};

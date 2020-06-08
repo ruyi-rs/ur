@@ -1,4 +1,4 @@
-use std::ptr::NonNull;
+use std::rc::Rc;
 
 use crate::params::UringParams;
 use crate::uring::Mmap;
@@ -36,32 +36,6 @@ pub struct Entry {
 }
 
 #[derive(Debug)]
-pub(crate) enum RingPtr {
-    Borrowed(NonNull<libc::c_void>),
-    Owned(Mmap<libc::c_void>),
-}
-
-impl RingPtr {
-    #[inline]
-    pub const fn from_borrowed(ptr: &Mmap<libc::c_void>) -> Self {
-        RingPtr::Borrowed(unsafe { NonNull::new_unchecked(ptr.as_ptr()) })
-    }
-
-    #[inline]
-    pub const fn from_owned(ptr: Mmap<libc::c_void>) -> Self {
-        RingPtr::Owned(ptr)
-    }
-
-    #[inline]
-    fn as_ptr(&self) -> *mut libc::c_void {
-        match *self {
-            Self::Borrowed(p) => p.as_ptr(),
-            Self::Owned(ref p) => p.as_ptr(),
-        }
-    }
-}
-
-#[derive(Debug)]
 pub(crate) struct Queue {
     khead: *mut u32,
     ktail: *const u32,
@@ -71,12 +45,12 @@ pub(crate) struct Queue {
     koverflow: *const u32,
     cqes: *const Entry,
 
-    ring_ptr: RingPtr,
+    ring_ptr: Rc<Mmap<libc::c_void>>,
 }
 
 impl Queue {
     #[inline]
-    pub fn new(ring_ptr: RingPtr, params: &UringParams) -> Self {
+    pub fn new(ring_ptr: Rc<Mmap<libc::c_void>>, params: &UringParams) -> Self {
         let ptr = ring_ptr.as_ptr();
         let cq_off = params.cq_off();
         unsafe {
