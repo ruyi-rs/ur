@@ -793,4 +793,8 @@ impl Uring {
             None => false,
         }
     }
+
+    pub fn flush_sq(&mut self) -> u32 {
+        todo!()
+    }
 }
