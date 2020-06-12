@@ -3,6 +3,7 @@ use std::ffi::CStr;
 use std::fmt;
 use std::io::{IoSlice, IoSliceMut, Result};
 use std::mem;
+use std::ops::{Deref, DerefMut};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::ptr;
 
@@ -118,18 +119,8 @@ impl<T> Mmap<T> {
     }
 
     #[inline]
-    pub const fn as_ptr(&self) -> *mut T {
+    pub const fn as_mut_ptr(&self) -> *mut T {
         self.addr.as_ptr()
-    }
-}
-
-impl<T> Drop for Mmap<T> {
-    #[inline]
-    fn drop(&mut self) {
-        unsafe {
-            let ptr = self.addr.as_ptr() as *mut libc::c_void;
-            sys::munmap(ptr, self.len).ok();
-        }
     }
 }
 
@@ -795,6 +786,15 @@ impl Uring {
     }
 
     pub fn flush_sq(&mut self) -> u32 {
+        todo!()
+    }
+
+    #[inline]
+    pub fn submit(&mut self) -> Result<usize> {
+        self.submit_and_wait(0)
+    }
+
+    pub fn submit_and_wait(&mut self, wait_nr: u32) -> Result<usize> {
         todo!()
     }
 }

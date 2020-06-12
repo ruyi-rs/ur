@@ -168,10 +168,11 @@ pub struct Queue {
     kring_entries: u32,
     kflags: &'static AtomicU32,
     kdropped: *const u32,
-    array: *const u32,
+    array: *mut u32,
     sqes: Mmap<Entry>,
 
     khead_shadow: u32,
+    ktail_shadow: u32,
 
     sqe_head: u32,
     sqe_tail: u32,
@@ -186,19 +187,20 @@ impl Queue {
         sqes: Mmap<Entry>,
         params: &UringParams,
     ) -> Self {
-        let ptr = ring_ptr.as_ptr();
+        let ptr = ring_ptr.as_mut_ptr();
         let sq_off = params.sq_off();
         unsafe {
             Self {
                 khead: &*(ptr.add(sq_off.head as usize) as *const AtomicU32),
-                ktail: &*(ptr.add(sq_off.tail as usize) as *const AtomicU32),
+                ktail: &mut *(ptr.add(sq_off.tail as usize) as *mut AtomicU32),
                 kring_mask: *(ptr.add(sq_off.ring_mask as usize) as *const u32),
                 kring_entries: *(ptr.add(sq_off.ring_entries as usize) as *const u32),
                 kflags: &*(ptr.add(sq_off.flags as usize) as *const AtomicU32),
                 kdropped: ptr.add(sq_off.dropped as usize) as *const u32,
-                array: ptr.add(sq_off.array as usize) as *const u32,
+                array: ptr.add(sq_off.array as usize) as *mut u32,
                 sqes,
                 khead_shadow: 0,
+                ktail_shadow: 0,
                 sqe_head: 0,
                 sqe_tail: 0,
                 ring_ptr,
@@ -216,7 +218,7 @@ impl Queue {
         }
         let count = (self.sqe_tail & self.kring_mask) as usize;
         self.sqe_tail = self.sqe_tail.wrapping_add(1);
-        let entry = unsafe { &mut *(self.sqes.as_ptr().add(count)) };
+        let entry = unsafe { &mut *(self.sqes.as_mut_ptr().add(count)) };
         Some(entry)
     }
 
@@ -249,5 +251,28 @@ impl Queue {
             }
             None => None,
         }
+    }
+
+    #[inline]
+    pub(crate) fn flush(&mut self) -> u32 {
+        if self.sqe_head == self.sqe_tail {
+            return self.ktail_shadow.wrapping_sub(self.khead_shadow);
+        }
+        let mut to_submit = self.sqe_tail.wrapping_sub(self.sqe_head);
+        while to_submit > 0 {
+            unsafe {
+                let sqe = self
+                    .array
+                    .add((self.ktail_shadow & self.kring_mask) as usize);
+                *sqe = self.sqe_head & self.kring_mask;
+            }
+
+            self.ktail_shadow = self.ktail_shadow.wrapping_add(1);
+            self.sqe_head = self.sqe_head.wrapping_add(1);
+            to_submit -= 1;
+        }
+
+        self.ktail.store(self.ktail_shadow, Ordering::Release);
+        self.ktail_shadow.wrapping_sub(self.khead_shadow)
     }
 }

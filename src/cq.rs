@@ -51,7 +51,7 @@ pub(crate) struct Queue {
 impl Queue {
     #[inline]
     pub fn new(ring_ptr: Rc<Mmap<libc::c_void>>, params: &UringParams) -> Self {
-        let ptr = ring_ptr.as_ptr();
+        let ptr = ring_ptr.as_mut_ptr();
         let cq_off = params.cq_off();
         unsafe {
             Self {
