@@ -785,16 +785,14 @@ impl Uring {
         }
     }
 
-    pub fn flush_sq(&mut self) -> u32 {
-        todo!()
-    }
-
     #[inline]
     pub fn submit(&mut self) -> Result<usize> {
         self.submit_and_wait(0)
     }
 
     pub fn submit_and_wait(&mut self, wait_nr: u32) -> Result<usize> {
+        let submitted = self.sq.flush();
+        
         todo!()
     }
 }
