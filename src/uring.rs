@@ -3,9 +3,10 @@ use std::ffi::CStr;
 use std::fmt;
 use std::io::{IoSlice, IoSliceMut, Result};
 use std::mem;
-use std::ops::{Deref, DerefMut};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::ptr;
+
+use bitflags::bitflags;
 
 use crate::params::{Setup, UringBuilder};
 use crate::{cq, sq, sys};
@@ -162,6 +163,14 @@ impl fmt::Debug for Probe {
             "Probe {{ last_op: {}, ops_len: {} }}",
             self.last_op, self.ops_len
         )
+    }
+}
+
+// io_uring_enter(2) flags
+bitflags! {
+    pub struct Enter: u32 {
+        const GETEVENTS = 1 << 0;
+        const SQ_WAKEUP = 1 << 1;
     }
 }
 
@@ -792,7 +801,32 @@ impl Uring {
 
     pub fn submit_and_wait(&mut self, wait_nr: u32) -> Result<usize> {
         let submitted = self.sq.flush();
-        
+        let mut flags = Enter::empty();
+        let n = if self.need_enter(submitted, &mut flags) || wait_nr > 0 {
+            if wait_nr > 0 || self.flags.contains(Setup::IOPOLL) {
+                flags.insert(Enter::GETEVENTS);
+            }
+            unsafe { sys::io_uring_enter(self.fd.as_raw_fd(), submitted, wait_nr, flags.bits())? }
+        } else {
+            submitted as usize
+        };
+        Ok(n)
+    }
+
+    pub fn get_cqe(&self, submit: u32, wait_nr: u32) -> Result<cq::Entry> {
+        // TODO: get_cqe
         todo!()
+    }
+
+    #[inline]
+    fn need_enter(&self, submitted: u32, flags: &mut Enter) -> bool {
+        if !self.flags.contains(Setup::SQPOLL) && submitted > 0 {
+            return true;
+        }
+        if self.sq.need_wakeup() {
+            flags.insert(Enter::SQ_WAKEUP);
+            return true;
+        }
+        false
     }
 }

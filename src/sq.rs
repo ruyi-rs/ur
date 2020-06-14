@@ -181,6 +181,9 @@ pub struct Queue {
 }
 
 impl Queue {
+    // needs io_uring_enter wakeup
+    const NEED_WAKEUP: u32 = 1 << 0;
+
     #[inline]
     pub(crate) fn new(
         ring_ptr: Rc<Mmap<libc::c_void>>,
@@ -268,7 +271,7 @@ impl Queue {
 
     #[inline]
     pub(crate) fn flush(&mut self) -> u32 {
-        if self.sqe_head < self.sqe_tail {
+        if self.sqe_head != self.sqe_tail {
             let to_submit = self.sqe_tail.wrapping_sub(self.sqe_head);
             self.sqe_head = self.sqe_tail;
 
@@ -278,5 +281,10 @@ impl Queue {
 
         self.khead_shadow = self.khead.load(Ordering::Acquire);
         self.ktail_shadow.wrapping_sub(self.khead_shadow)
+    }
+
+    #[inline]
+    pub(crate) fn need_wakeup(&self) -> bool {
+        (self.kflags.load(Ordering::Relaxed) & Self::NEED_WAKEUP) != 0
     }
 }
