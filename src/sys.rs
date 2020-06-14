@@ -17,7 +17,7 @@ const __NR_io_uring_enter: libc::c_long = 426;
 const __NR_io_uring_register: libc::c_long = 427;
 
 #[inline]
-fn cvt(ret: i32) -> Result<i32> {
+pub fn cvt(ret: i32) -> Result<i32> {
     if ret >= 0 {
         Ok(ret)
     } else {

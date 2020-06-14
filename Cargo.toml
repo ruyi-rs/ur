@@ -1,13 +1,13 @@
 [package]
-name = "ruyi-iou"
+name = "ruyi-ur"
 version = "0.1.0"
 authors = ["Agemo Cui <agemo.git.cui@gmail.com>"]
 edition = "2018"
 description = "A pure Rust library for io_uring"
 license = "MIT OR Apache-2.0"
-documentation = "https://docs.rs/ruyi-iou"
-homepage = "https://github.com/ruyi-rs/iou"
-repository = "https://github.com/ruyi-rs/iou"
+documentation = "https://docs.rs/ruyi-ur"
+homepage = "https://github.com/ruyi-rs/ur"
+repository = "https://github.com/ruyi-rs/ur"
 readme = "README.md"
 keywords = ["async", "io", "uring", "non-blocking"]
 categories = ["asynchronous", "filesystem", "network-programming"]

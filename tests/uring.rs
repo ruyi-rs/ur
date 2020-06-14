@@ -1,4 +1,4 @@
-use ruyi_iou::{Op, Uring};
+use ruyi_ur::{Op, Uring};
 
 #[test]
 fn uring_probe() {

@@ -167,7 +167,7 @@ pub struct Queue {
     kring_mask: u32,
     kring_entries: u32,
     kflags: &'static AtomicU32,
-    kdropped: *const u32,
+    kdropped: &'static AtomicU32,
     //array: *const u32,
     sqes: Mmap<Entry>,
 
@@ -212,16 +212,21 @@ impl Queue {
                 kring_mask,
                 kring_entries,
                 kflags: &*(ptr.add(sq_off.flags as usize) as *const AtomicU32),
-                kdropped: ptr.add(sq_off.dropped as usize) as *const u32,
+                kdropped: &*(ptr.add(sq_off.dropped as usize) as *const AtomicU32),
                 //array,
                 sqes,
-                khead_shadow: khead.load(Ordering::Relaxed),
+                khead_shadow: khead.load(Ordering::Acquire),
                 ktail_shadow,
                 sqe_head: 0,
                 sqe_tail: 0,
                 ring_ptr,
             }
         }
+    }
+
+    #[inline]
+    pub(crate) fn dropped(&self) -> u32 {
+        self.kdropped.load(Ordering::Relaxed)
     }
 
     #[inline]
