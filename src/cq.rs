@@ -1,3 +1,5 @@
+use std::io::Result;
+use std::sync::atomic::AtomicU32;
 use std::rc::Rc;
 
 use crate::params::UringParams;
@@ -37,11 +39,11 @@ pub struct Entry {
 
 #[derive(Debug)]
 pub(crate) struct Queue {
-    khead: *mut u32,
-    ktail: *const u32,
-    kring_mask: *const u32,
-    kring_entries: *const u32,
-    kflags: *const u32,
+    khead: &'static AtomicU32,
+    ktail: &'static AtomicU32,
+    kring_mask: u32,
+    kring_entries: u32,
+    kflags: &'static AtomicU32,
     koverflow: *const u32,
     cqes: *const Entry,
 
@@ -54,16 +56,23 @@ impl Queue {
         let ptr = ring_ptr.as_mut_ptr();
         let cq_off = params.cq_off();
         unsafe {
+            let khead = &*(ptr.add(cq_off.head as usize) as *const AtomicU32);
+            let ktail = &*(ptr.add(cq_off.tail as usize) as *const AtomicU32);
             Self {
-                khead: ptr.add(cq_off.head as usize) as *mut u32,
-                ktail: ptr.add(cq_off.tail as usize) as *const u32,
-                kring_mask: ptr.add(cq_off.ring_mask as usize) as *const u32,
-                kring_entries: ptr.add(cq_off.ring_entries as usize) as *const u32,
-                kflags: ptr.add(cq_off.flags as usize) as *const u32,
+                khead,
+                ktail,
+                kring_mask: *(ptr.add(cq_off.ring_mask as usize) as *const u32),
+                kring_entries: *(ptr.add(cq_off.ring_entries as usize) as *const u32),
+                kflags: &*(ptr.add(cq_off.flags as usize) as *const AtomicU32),
                 koverflow: ptr.add(cq_off.overflow as usize) as *const u32,
                 cqes: ptr.add(cq_off.cqes as usize) as *const Entry,
                 ring_ptr,
             }
         }
+    }
+
+    pub fn peek_cqe(&self) -> Option<&Entry> {
+        // TODO:
+        todo!()
     }
 }

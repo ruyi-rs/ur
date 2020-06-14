@@ -813,7 +813,7 @@ impl Uring {
         Ok(n)
     }
 
-    pub fn get_cqe(&self, submit: u32, wait_nr: u32) -> Result<cq::Entry> {
+    pub fn get_cqe(&self, submit: u32, wait_nr: u32) -> Result<&cq::Entry> {
         // TODO: get_cqe
         todo!()
     }
@@ -828,5 +828,8 @@ impl Uring {
             return true;
         }
         false
+    }
+
+    fn peek_cqe(&self) -> Result<&cq::Entry> {
     }
 }
