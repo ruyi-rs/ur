@@ -61,7 +61,7 @@ pub unsafe fn io_uring_enter(
     to_submit: u32,
     min_complete: u32,
     flags: u32,
-) -> Result<usize> {
+) -> Result<u32> {
     let n = libc::syscall(
         __NR_io_uring_enter,
         fd as libc::c_long,
@@ -71,7 +71,7 @@ pub unsafe fn io_uring_enter(
         ptr::null::<libc::sigset_t>() as libc::c_long,
         0 as libc::c_long,
     ) as i32;
-    cvt(n).and(Ok(n as usize))
+    cvt(n).and(Ok(n as u32))
 }
 
 #[inline]
@@ -81,7 +81,7 @@ pub unsafe fn io_uring_penter(
     min_complete: u32,
     flags: u32,
     sig: &libc::sigset_t,
-) -> Result<usize> {
+) -> Result<u32> {
     let n = libc::syscall(
         __NR_io_uring_enter,
         fd as libc::c_long,
@@ -91,7 +91,7 @@ pub unsafe fn io_uring_penter(
         sig as *const libc::sigset_t as libc::c_long,
         mem::size_of::<libc::sigset_t>() as libc::c_long,
     ) as i32;
-    cvt(n).and(Ok(n as usize))
+    cvt(n).and(Ok(n as u32))
 }
 
 #[inline]

@@ -1,7 +1,7 @@
 use std::alloc::{alloc_zeroed, Layout};
 use std::ffi::CStr;
 use std::fmt;
-use std::io::{IoSlice, IoSliceMut, Result};
+use std::io::{Error, ErrorKind, IoSlice, IoSliceMut, Result};
 use std::mem;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::ptr;
@@ -795,31 +795,67 @@ impl Uring {
     }
 
     #[inline]
-    pub fn submit(&mut self) -> Result<usize> {
+    pub fn submit(&mut self) -> Result<u32> {
         self.submit_and_wait(0)
     }
 
-    pub fn submit_and_wait(&mut self, wait_nr: u32) -> Result<usize> {
+    pub fn submit_and_wait(&mut self, wait_nr: u32) -> Result<u32> {
         let submitted = self.sq.flush();
         let mut flags = Enter::empty();
         let n = if self.need_enter(submitted, &mut flags) || wait_nr > 0 {
             if wait_nr > 0 || self.flags.contains(Setup::IOPOLL) {
                 flags.insert(Enter::GETEVENTS);
             }
-            unsafe { sys::io_uring_enter(self.fd.as_raw_fd(), submitted, wait_nr, flags.bits())? }
+            self.enter(submitted, wait_nr, &flags)?
         } else {
-            submitted as usize
+            submitted
         };
         Ok(n)
     }
 
-    pub fn get_cqe(&self, submit: u32, wait_nr: u32, sigmask: &libc::sigset_t) -> Result<&cq::Entry> {
-        let to_wait = wait_nr;
+    pub fn get_cqe(
+        &mut self,
+        mut submit: u32,
+        to_wait: u32,
+        sigmask: Option<&libc::sigset_t>,
+    ) -> Result<&cq::Entry> {
+        let mut wait_nr = to_wait;
+        let mut ret = 0;
         loop {
+            let mut flags = Enter::empty();
+            match self.cq.peek_cqe()? {
+                Some(cqe) => {
+                    if wait_nr > 0 {
+                        wait_nr -= 1;
+                    }
+                }
+                None => {
+                    if to_wait == 0 && submit == 0 {
+                        return Err(Error::from_raw_os_error(libc::EAGAIN));
+                    }
+                }
+            }
 
+            if wait_nr > 0 {
+                flags.insert(Enter::GETEVENTS);
+            }
+            if submit > 0 {
+                self.need_enter(submit, &mut flags);
+            }
+            if wait_nr > 0 || submit > 0 {
+                ret = self.penter(submit, wait_nr, &flags, sigmask)?
+            }
+            if ret == submit {
+                submit = 0;
+                if !self.flags.contains(Setup::IOPOLL) {
+                    wait_nr = 0;
+                }
+            } else {
+                submit -= ret;
+            }
+            // TODO: return cqe
+            todo!();
         }
-        // TODO: get_cqe
-        todo!()
     }
 
     #[inline]
@@ -832,5 +868,34 @@ impl Uring {
             return true;
         }
         false
+    }
+
+    #[inline]
+    fn enter(&self, to_submit: u32, min_complete: u32, flags: &Enter) -> Result<u32> {
+        unsafe { sys::io_uring_enter(self.fd.as_raw_fd(), to_submit, min_complete, flags.bits()) }
+    }
+
+    #[inline]
+    fn penter(
+        &self,
+        to_submit: u32,
+        min_complete: u32,
+        flags: &Enter,
+        sig: Option<&libc::sigset_t>,
+    ) -> Result<u32> {
+        match sig {
+            Some(s) => unsafe {
+                sys::io_uring_penter(
+                    self.fd.as_raw_fd(),
+                    to_submit,
+                    min_complete,
+                    flags.bits(),
+                    s,
+                )
+            },
+            None => unsafe {
+                sys::io_uring_enter(self.fd.as_raw_fd(), to_submit, min_complete, flags.bits())
+            },
+        }
     }
 }
