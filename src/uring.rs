@@ -818,23 +818,25 @@ impl Uring {
         mut submit: u32,
         to_wait: u32,
         sigmask: Option<&libc::sigset_t>,
-    ) -> Result<&cq::Entry> {
+    ) -> Result<cq::Entry> {
         let mut wait_nr = to_wait;
         let mut ret = 0;
         loop {
             let mut flags = Enter::empty();
-            match self.cq.peek_cqe()? {
+            let peeked = match self.cq.peek_cqe()? {
                 Some(cqe) => {
                     if wait_nr > 0 {
                         wait_nr -= 1;
                     }
+                    Some(*cqe)
                 }
                 None => {
                     if to_wait == 0 && submit == 0 {
                         return Err(Error::from_raw_os_error(libc::EAGAIN));
                     }
+                    None
                 }
-            }
+            };
 
             if wait_nr > 0 {
                 flags.insert(Enter::GETEVENTS);
@@ -853,8 +855,10 @@ impl Uring {
             } else {
                 submit -= ret;
             }
-            // TODO: return cqe
-            todo!();
+            if let Some(cqe) = peeked {
+                self.cq.advance(1);
+                return Ok(cqe);
+            }
         }
     }
 

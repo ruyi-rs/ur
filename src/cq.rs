@@ -110,7 +110,7 @@ impl Queue {
     }
 
     #[inline]
-    fn advance(&mut self, n: u32) {
+    pub fn advance(&mut self, n: u32) {
         if n > 0 {
             self.khead_shadow = self.khead_shadow.wrapping_add(n);
             self.khead.store(self.khead_shadow, Ordering::Release);
