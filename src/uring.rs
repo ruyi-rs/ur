@@ -813,7 +813,17 @@ impl Uring {
         Ok(n)
     }
 
-    pub fn get_cqe(
+    #[inline]
+    pub fn wait_cqe_nr(&mut self, wait_nr: u32) -> Result<cq::Entry> {
+        self.get_cqe(0, wait_nr, None)
+    }
+
+    #[inline]
+    pub fn wait_cqe(&mut self) -> Result<cq::Entry> {
+        self.get_cqe(0, 1, None)
+    }
+
+    fn get_cqe(
         &mut self,
         mut submit: u32,
         to_wait: u32,
