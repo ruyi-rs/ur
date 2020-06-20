@@ -1,7 +1,7 @@
 use std::alloc::{alloc_zeroed, Layout};
 use std::ffi::CStr;
 use std::fmt;
-use std::io::{Error, ErrorKind, IoSlice, IoSliceMut, Result};
+use std::io::{Error, IoSlice, IoSliceMut, Result};
 use std::mem;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::ptr;
@@ -830,6 +830,16 @@ impl<'a> Uring<'a> {
     #[inline]
     pub fn wait_cqe(&mut self) -> Result<cq::Entry> {
         self.get_cqe(0, 1, None)
+    }
+
+    #[inline]
+    pub fn dropped(&self) -> u32 {
+        self.sq.dropped()
+    }
+
+    #[inline]
+    pub fn overflow(&self) -> u32 {
+        self.cq.overflow()
     }
 
     fn get_cqe(
