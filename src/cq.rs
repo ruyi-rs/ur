@@ -38,6 +38,31 @@ pub struct Entry {
     flags: u32,     // IoRingCqeFlags::* flags
 }
 
+impl Entry {
+    const F_BUFFER: u32 = 1 << 0;
+
+    const BUFFER_SHIFT: u32 = 16;
+
+    #[inline]
+    pub fn user_data(&self) -> u64 {
+        self.user_data
+    }
+
+    #[inline]
+    pub fn res(&self) -> i32 {
+        self.res
+    }
+
+    #[inline]
+    pub fn buffer_id(&self) -> Option<u16> {
+        if self.flags & Self::F_BUFFER != 0 {
+            Some((self.flags >> Self::BUFFER_SHIFT) as u16)
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Queue {
     khead: &'static AtomicU32,
