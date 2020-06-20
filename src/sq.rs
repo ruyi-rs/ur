@@ -161,13 +161,13 @@ impl Entry {
 }
 
 #[derive(Debug)]
-pub struct Queue {
-    khead: &'static AtomicU32,
-    ktail: &'static AtomicU32,
+pub struct Queue<'a> {
+    khead: &'a AtomicU32,
+    ktail: &'a AtomicU32,
     kring_mask: u32,
     kring_entries: u32,
-    kflags: &'static AtomicU32,
-    kdropped: &'static AtomicU32,
+    kflags: &'a AtomicU32,
+    kdropped: &'a AtomicU32,
     //array: *const u32,
     sqes: Mmap<Entry>,
 
@@ -180,7 +180,7 @@ pub struct Queue {
     ring_ptr: Rc<Mmap<libc::c_void>>,
 }
 
-impl Queue {
+impl Queue<'_> {
     // needs io_uring_enter wakeup
     const NEED_WAKEUP: u32 = 1 << 0;
 

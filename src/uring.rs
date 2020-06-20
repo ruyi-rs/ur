@@ -125,6 +125,15 @@ impl<T> Mmap<T> {
     }
 }
 
+impl<T> Drop for Mmap<T> {
+    #[inline]
+    fn drop(&mut self) {
+        unsafe {
+            sys::munmap(self.addr.as_ptr() as *mut _, self.len).ok();
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct ProbeOp {
@@ -175,14 +184,14 @@ bitflags! {
 }
 
 #[derive(Debug)]
-pub struct Uring {
-    sq: sq::Queue,
-    cq: cq::Queue,
+pub struct Uring<'a> {
+    sq: sq::Queue<'a>,
+    cq: cq::Queue<'a>,
     flags: Setup,
     fd: Fd,
 }
 
-impl Uring {
+impl<'a> Uring<'a> {
     // io_uring_register(2) opcodes and arguments
     const REGISTER_BUFFERS: libc::c_uint = 0;
     const UNREGISTER_BUFFERS: libc::c_uint = 1;
@@ -197,7 +206,7 @@ impl Uring {
     const UNREGISTER_PERSONALITY: libc::c_uint = 10;
 
     #[inline]
-    pub(crate) fn new(sq: sq::Queue, cq: cq::Queue, flags: Setup, fd: Fd) -> Self {
+    pub(crate) fn new(sq: sq::Queue<'a>, cq: cq::Queue<'a>, flags: Setup, fd: Fd) -> Self {
         Self { sq, cq, flags, fd }
     }
 

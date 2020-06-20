@@ -64,13 +64,13 @@ impl Entry {
 }
 
 #[derive(Debug)]
-pub(crate) struct Queue {
-    khead: &'static AtomicU32,
-    ktail: &'static AtomicU32,
+pub(crate) struct Queue<'a> {
+    khead: &'a AtomicU32,
+    ktail: &'a AtomicU32,
     kring_mask: u32,
     kring_entries: u32,
-    kflags: &'static AtomicU32,
-    koverflow: &'static AtomicU32,
+    kflags: &'a AtomicU32,
+    koverflow: &'a AtomicU32,
     cqes: *const Entry,
 
     khead_shadow: u32,
@@ -79,7 +79,7 @@ pub(crate) struct Queue {
     ring_ptr: Rc<Mmap<libc::c_void>>,
 }
 
-impl Queue {
+impl Queue<'_> {
     const UDATA_TIMEOUT: u64 = -1i64 as u64;
 
     #[inline]

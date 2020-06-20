@@ -77,7 +77,7 @@ impl UringParams {
     }
 
     #[inline]
-    fn mmap(&self, fd: &Fd) -> Result<(sq::Queue, cq::Queue)> {
+    fn mmap<'a>(&self, fd: &Fd) -> Result<(sq::Queue<'a>, cq::Queue<'a>)> {
         let sq_ring_sz =
             self.sq_off.array() as usize + self.sq_entries as usize * mem::size_of::<u32>();
         let cq_ring_sz =
@@ -183,7 +183,7 @@ impl UringBuilder {
         self
     }
 
-    pub fn try_build(&self) -> Result<Uring> {
+    pub fn try_build<'a>(&self) -> Result<Uring<'a>> {
         let mut params = self.params();
         let fd = self.setup(&mut params)?;
         let (sq, cq) = params.mmap(&fd)?;
