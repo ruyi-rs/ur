@@ -8,59 +8,9 @@ use std::ptr;
 
 use bitflags::bitflags;
 
+use crate::op::{Code, Op};
 use crate::params::{Setup, UringBuilder};
 use crate::{cq, sq, sys};
-
-#[derive(Debug, Copy, Clone)]
-pub enum Op {
-    Nop,
-    Readv,
-    Writev,
-    Fsync,
-    ReadFixed,
-    WriteFixed,
-    PollAdd,
-    PollRemove,
-    SyncFileRange,
-    SendMsg,
-    RecvMsg,
-    Timeout,
-    TimeoutRemove,
-    Accept,
-    AsyncCancel,
-    LinkTimeout,
-    Connect,
-    Fallocate,
-    Openat,
-    Close,
-    FilesUpdate,
-    Statx,
-    Read,
-    Write,
-    Fadvise,
-    Madvise,
-    Send,
-    Recv,
-    Openat2,
-    EpollCtl,
-    Splice,
-    ProvideBuffers,
-    RemoveBuffers,
-}
-
-impl Op {
-    const SUPPORTED: u16 = 1 << 0;
-
-    pub fn is_supported(self, probe: &Probe) -> bool {
-        let opcode = self as u8;
-        if opcode <= probe.last_op {
-            let probe_op = unsafe { probe.ops.get_unchecked(opcode as usize) };
-            probe_op.flags & Self::SUPPORTED != 0
-        } else {
-            false
-        }
-    }
-}
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -136,7 +86,7 @@ impl<T> Drop for Mmap<T> {
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct ProbeOp {
+pub(crate) struct ProbeOp {
     op: u8,
     _resv: u8,
     flags: u16, // IO_URING_OP_* flags
@@ -162,6 +112,20 @@ pub struct Probe {
     _resv: u16,
     _resv2: [u32; 3],
     ops: [ProbeOp; 256],
+}
+
+impl Probe {
+    #[inline]
+    pub fn support<T: Op>(&self) -> bool {
+        const SUPPORTED: u16 = 1 << 0;
+        let opcode: u8 = T::code();
+        if opcode <= self.last_op {
+            let probe_op = unsafe { self.ops.get_unchecked(opcode as usize) };
+            probe_op.flags & SUPPORTED != 0
+        } else {
+            false
+        }
+    }
 }
 
 impl fmt::Debug for Probe {
@@ -348,7 +312,7 @@ impl<'a> Uring<'a> {
     ) -> bool {
         match self
             .sq
-            .prep_rw(Op::Splice, fd_out, ptr::null(), nbytes, off_out)
+            .prep_rw(Code::Splice, fd_out, ptr::null(), nbytes, off_out)
         {
             Some(sqe) => {
                 sqe.set_splice_off_in(off_in);
@@ -364,7 +328,7 @@ impl<'a> Uring<'a> {
     pub unsafe fn prep_readv(&mut self, fd: RawFd, iovecs: &[IoSliceMut], offset: u64) -> bool {
         self.sq
             .prep_rw(
-                Op::Readv,
+                Code::Readv,
                 fd,
                 iovecs.as_ptr() as *const _,
                 iovecs.len() as u32,
@@ -382,7 +346,7 @@ impl<'a> Uring<'a> {
         buf_index: u16,
     ) -> bool {
         match self.sq.prep_rw(
-            Op::ReadFixed,
+            Code::ReadFixed,
             fd,
             buf.as_ptr() as *const _,
             buf.len() as u32,
@@ -400,7 +364,7 @@ impl<'a> Uring<'a> {
     pub unsafe fn prep_writev(&mut self, fd: RawFd, iovecs: &[IoSlice], offset: u64) -> bool {
         self.sq
             .prep_rw(
-                Op::Writev,
+                Code::Writev,
                 fd,
                 iovecs.as_ptr() as *const _,
                 iovecs.len() as u32,
@@ -418,7 +382,7 @@ impl<'a> Uring<'a> {
         buf_index: u16,
     ) -> bool {
         match self.sq.prep_rw(
-            Op::WriteFixed,
+            Code::WriteFixed,
             fd,
             buf.as_ptr() as *const _,
             buf.len() as u32,
@@ -436,7 +400,7 @@ impl<'a> Uring<'a> {
     pub unsafe fn prep_recvmsg(&mut self, fd: RawFd, msg: &mut libc::msghdr, flags: u32) -> bool {
         match self
             .sq
-            .prep_rw(Op::RecvMsg, fd, msg as *const _ as *const _, 1, 0)
+            .prep_rw(Code::RecvMsg, fd, msg as *const _ as *const _, 1, 0)
         {
             Some(sqe) => {
                 sqe.set_msg_flags(flags);
@@ -450,7 +414,7 @@ impl<'a> Uring<'a> {
     pub unsafe fn prep_sendmsg(&mut self, fd: RawFd, msg: &libc::msghdr, flags: u32) -> bool {
         match self
             .sq
-            .prep_rw(Op::SendMsg, fd, msg as *const _ as *const _, 1, 0)
+            .prep_rw(Code::SendMsg, fd, msg as *const _ as *const _, 1, 0)
         {
             Some(sqe) => {
                 sqe.set_msg_flags(flags);
@@ -462,7 +426,7 @@ impl<'a> Uring<'a> {
 
     #[inline]
     pub unsafe fn prep_poll_add(&mut self, fd: RawFd, poll_mask: u16) -> bool {
-        match self.sq.prep_rw(Op::PollAdd, fd, ptr::null(), 0, 0) {
+        match self.sq.prep_rw(Code::PollAdd, fd, ptr::null(), 0, 0) {
             Some(sqe) => {
                 sqe.set_poll_events(poll_mask);
                 true
@@ -474,13 +438,13 @@ impl<'a> Uring<'a> {
     #[inline]
     pub unsafe fn prep_poll_remove(&mut self, fd: RawFd, user_data: *const libc::c_void) -> bool {
         self.sq
-            .prep_rw(Op::PollRemove, fd, user_data, 0, 0)
+            .prep_rw(Code::PollRemove, fd, user_data, 0, 0)
             .is_some()
     }
 
     #[inline]
     pub unsafe fn prep_fsync(&mut self, fd: RawFd, fsync_flags: u32) -> bool {
-        match self.sq.prep_rw(Op::Fsync, fd, ptr::null(), 0, 0) {
+        match self.sq.prep_rw(Code::Fsync, fd, ptr::null(), 0, 0) {
             Some(sqe) => {
                 sqe.set_fsync_flags(fsync_flags);
                 true
@@ -490,16 +454,14 @@ impl<'a> Uring<'a> {
     }
 
     #[inline]
-    pub unsafe fn prep_nop(&mut self) -> bool {
-        self.sq.prep_rw(Op::Nop, -1, ptr::null(), 0, 0).is_some()
-    }
-
-    #[inline]
     pub unsafe fn prep_timeout(&mut self, ts: &libc::timespec, count: u32, flags: u32) -> bool {
-        match self
-            .sq
-            .prep_rw(Op::Timeout, -1, ts as *const _ as *const _, 1, count as u64)
-        {
+        match self.sq.prep_rw(
+            Code::Timeout,
+            -1,
+            ts as *const _ as *const _,
+            1,
+            count as u64,
+        ) {
             Some(sqe) => {
                 sqe.set_timeout_flags(flags);
                 true
@@ -512,7 +474,7 @@ impl<'a> Uring<'a> {
     pub unsafe fn prep_timeout_remove(&mut self, user_data: u64, flags: u32) -> bool {
         match self
             .sq
-            .prep_rw(Op::TimeoutRemove, -1, user_data as *const _, 0, 0)
+            .prep_rw(Code::TimeoutRemove, -1, user_data as *const _, 0, 0)
         {
             Some(sqe) => {
                 sqe.set_timeout_flags(flags);
@@ -531,7 +493,7 @@ impl<'a> Uring<'a> {
         flags: u32,
     ) -> bool {
         match self.sq.prep_rw(
-            Op::Accept,
+            Code::Accept,
             fd,
             addr as *const _ as *const _,
             0,
@@ -547,7 +509,7 @@ impl<'a> Uring<'a> {
 
     #[inline]
     pub unsafe fn prep_cancel(&mut self, user_data: *const libc::c_void, flags: u32) -> bool {
-        match self.sq.prep_rw(Op::AsyncCancel, -1, user_data, 0, 0) {
+        match self.sq.prep_rw(Code::AsyncCancel, -1, user_data, 0, 0) {
             Some(sqe) => {
                 sqe.set_cancel_flags(flags);
                 true
@@ -560,7 +522,7 @@ impl<'a> Uring<'a> {
     pub unsafe fn prep_link_timeout(&mut self, ts: &libc::timespec, flags: u32) -> bool {
         match self
             .sq
-            .prep_rw(Op::LinkTimeout, -1, ts as *const _ as *const _, 1, 0)
+            .prep_rw(Code::LinkTimeout, -1, ts as *const _ as *const _, 1, 0)
         {
             Some(sqe) => {
                 sqe.set_timeout_flags(flags);
@@ -579,7 +541,7 @@ impl<'a> Uring<'a> {
     ) -> bool {
         self.sq
             .prep_rw(
-                Op::Connect,
+                Code::Connect,
                 fd,
                 addr as *const _ as *const _,
                 0,
@@ -592,7 +554,7 @@ impl<'a> Uring<'a> {
     pub unsafe fn prep_files_update(&mut self, fds: &[RawFd], offset: u32) -> bool {
         self.sq
             .prep_rw(
-                Op::FilesUpdate,
+                Code::FilesUpdate,
                 -1,
                 fds.as_ptr() as *const _,
                 fds.len() as u32,
@@ -604,7 +566,7 @@ impl<'a> Uring<'a> {
     #[inline]
     pub unsafe fn prep_fallocate(&mut self, fd: RawFd, mode: u32, offset: u64, len: u64) -> bool {
         self.sq
-            .prep_rw(Op::Fallocate, fd, len as *const _, mode, offset)
+            .prep_rw(Code::Fallocate, fd, len as *const _, mode, offset)
             .is_some()
     }
 
@@ -612,7 +574,7 @@ impl<'a> Uring<'a> {
     pub unsafe fn prep_openat(&mut self, dfd: RawFd, path: &CStr, flags: u32, mode: u32) -> bool {
         match self
             .sq
-            .prep_rw(Op::Openat, dfd, path.as_ptr() as *const _, mode, 0)
+            .prep_rw(Code::Openat, dfd, path.as_ptr() as *const _, mode, 0)
         {
             Some(sqe) => {
                 sqe.set_open_flags(flags);
@@ -624,14 +586,16 @@ impl<'a> Uring<'a> {
 
     #[inline]
     pub unsafe fn prep_close(&mut self, fd: RawFd) -> bool {
-        self.sq.prep_rw(Op::Close, fd, ptr::null(), 0, 0).is_some()
+        self.sq
+            .prep_rw(Code::Close, fd, ptr::null(), 0, 0)
+            .is_some()
     }
 
     #[inline]
     pub unsafe fn prep_read(&mut self, fd: RawFd, buf: &mut [u8], offset: u64) -> bool {
         self.sq
             .prep_rw(
-                Op::Read,
+                Code::Read,
                 fd,
                 buf.as_ptr() as *const _,
                 buf.len() as u32,
@@ -644,7 +608,7 @@ impl<'a> Uring<'a> {
     pub unsafe fn prep_write(&mut self, fd: RawFd, data: &[u8], offset: u64) -> bool {
         self.sq
             .prep_rw(
-                Op::Write,
+                Code::Write,
                 fd,
                 data.as_ptr() as *const _,
                 data.len() as u32,
@@ -663,7 +627,7 @@ impl<'a> Uring<'a> {
         statxbuf: &libc::statx,
     ) -> bool {
         match self.sq.prep_rw(
-            Op::Statx,
+            Code::Statx,
             dfd,
             path.as_ptr() as *const _,
             mask,
@@ -679,7 +643,7 @@ impl<'a> Uring<'a> {
 
     #[inline]
     pub unsafe fn prep_fadvise(&mut self, fd: RawFd, offset: u64, len: u32, advice: i32) -> bool {
-        match self.sq.prep_rw(Op::Fadvise, fd, ptr::null(), len, offset) {
+        match self.sq.prep_rw(Code::Fadvise, fd, ptr::null(), len, offset) {
             Some(sqe) => {
                 sqe.set_fadvise_advice_flags(advice as u32);
                 true
@@ -691,7 +655,7 @@ impl<'a> Uring<'a> {
     #[inline]
     pub unsafe fn prep_madvise(&mut self, mem: &[u8], advice: i32) -> bool {
         match self.sq.prep_rw(
-            Op::Madvise,
+            Code::Madvise,
             -1,
             mem.as_ptr() as *const _,
             mem.len() as u32,
@@ -708,7 +672,7 @@ impl<'a> Uring<'a> {
     #[inline]
     pub unsafe fn prep_send(&mut self, sockfd: RawFd, data: &[u8], flags: u32) -> bool {
         match self.sq.prep_rw(
-            Op::Send,
+            Code::Send,
             sockfd,
             data.as_ptr() as *const _,
             data.len() as u32,
@@ -725,7 +689,7 @@ impl<'a> Uring<'a> {
     #[inline]
     pub unsafe fn prep_recv(&mut self, sockfd: RawFd, buf: &mut [u8], flags: u32) -> bool {
         match self.sq.prep_rw(
-            Op::Recv,
+            Code::Recv,
             sockfd,
             buf.as_ptr() as *const _,
             buf.len() as u32,
@@ -743,7 +707,7 @@ impl<'a> Uring<'a> {
     pub unsafe fn prep_openat2(&mut self, dfd: RawFd, path: &CStr, how: &OpenHow) -> bool {
         self.sq
             .prep_rw(
-                Op::Openat2,
+                Code::Openat2,
                 dfd,
                 path.as_ptr() as *const _,
                 mem::size_of::<OpenHow>() as u32,
@@ -762,7 +726,7 @@ impl<'a> Uring<'a> {
     ) -> bool {
         self.sq
             .prep_rw(
-                Op::EpollCtl,
+                Code::EpollCtl,
                 epfd,
                 ev as *const _ as *const _,
                 op,
@@ -782,7 +746,7 @@ impl<'a> Uring<'a> {
     ) -> bool {
         match self
             .sq
-            .prep_rw(Op::ProvideBuffers, nr, addr, len, bid as u64)
+            .prep_rw(Code::ProvideBuffers, nr, addr, len, bid as u64)
         {
             Some(sqe) => {
                 sqe.set_buf_group(bgid);
@@ -794,7 +758,7 @@ impl<'a> Uring<'a> {
 
     #[inline]
     pub unsafe fn prep_remove_buffer(&mut self, nr: i32, bgid: u16) -> bool {
-        match self.sq.prep_rw(Op::RemoveBuffers, nr, ptr::null(), 0, 0) {
+        match self.sq.prep_rw(Code::RemoveBuffers, nr, ptr::null(), 0, 0) {
             Some(sqe) => {
                 sqe.set_buf_group(bgid);
                 true
@@ -833,13 +797,18 @@ impl<'a> Uring<'a> {
     }
 
     #[inline]
-    pub fn dropped(&self) -> u32 {
+    pub fn sq_dropped(&self) -> u32 {
         self.sq.dropped()
     }
 
     #[inline]
-    pub fn overflow(&self) -> u32 {
+    pub fn cq_overflow(&self) -> u32 {
         self.cq.overflow()
+    }
+
+    #[inline]
+    pub(crate) fn sq(&mut self) -> &mut sq::Queue<'a> {
+        &mut self.sq
     }
 
     fn get_cqe(

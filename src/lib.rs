@@ -1,8 +1,10 @@
+pub mod sq;
 pub mod cq;
+pub mod op;
+
 mod params;
-mod sq;
 mod sys;
 mod uring;
 
 pub use params::UringBuilder;
-pub use uring::{Op, OpenHow, Uring};
+pub use uring::{OpenHow, Uring};

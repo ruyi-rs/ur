@@ -3,14 +3,15 @@ use std::os::unix::io::RawFd;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use crate::op;
 use crate::params::UringParams;
-use crate::uring::{Mmap, Op};
+use crate::uring::Mmap;
 
 // Filled with the offset for mmap(2)
 // struct io_sqring_offsets
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct Offsets {
+pub(crate) struct Offsets {
     head: u32,
     tail: u32,
     ring_mask: u32,
@@ -161,7 +162,7 @@ impl Entry {
 }
 
 #[derive(Debug)]
-pub struct Queue<'a> {
+pub(crate) struct Queue<'a> {
     khead: &'a AtomicU32,
     ktail: &'a AtomicU32,
     kring_mask: u32,
@@ -246,7 +247,7 @@ impl Queue<'_> {
     #[inline]
     pub(crate) fn prep_rw(
         &mut self,
-        op: Op,
+        opcode: op::Code,
         fd: RawFd,
         addr: *const libc::c_void,
         len: u32,
@@ -254,7 +255,7 @@ impl Queue<'_> {
     ) -> Option<&mut Entry> {
         match self.vacate_entry() {
             Some(sqe) => {
-                sqe.opcode = op as u8;
+                sqe.opcode = opcode as u8;
                 sqe.flags = 0;
                 sqe.ioprio = 0;
                 sqe.fd = fd;
