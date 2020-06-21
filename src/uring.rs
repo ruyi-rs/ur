@@ -180,9 +180,13 @@ impl<'a> Uring<'a> {
     }
 
     #[inline]
+    pub(crate) unsafe fn register(&self, opcode: u32, arg: *const u8, nr_args: u32) -> Result<()> {
+        sys::io_uring_register(self.fd.as_raw_fd(), opcode, arg, nr_args)
+    }
+
+    #[inline]
     pub unsafe fn register_buffers(&self, bufs: &[IoSliceMut]) -> Result<()> {
-        sys::io_uring_register(
-            self.fd.as_raw_fd(),
+        self.register(
             Self::REGISTER_BUFFERS,
             bufs.as_ptr() as *const _,
             bufs.len() as u32,
@@ -191,18 +195,12 @@ impl<'a> Uring<'a> {
 
     #[inline]
     pub unsafe fn unregister_buffers(&self) -> Result<()> {
-        sys::io_uring_register(
-            self.fd.as_raw_fd(),
-            Self::UNREGISTER_BUFFERS,
-            ptr::null(),
-            0,
-        )
+        self.register(Self::UNREGISTER_BUFFERS, ptr::null(), 0)
     }
 
     #[inline]
     pub unsafe fn register_files(&self, fds: &[RawFd]) -> Result<()> {
-        sys::io_uring_register(
-            self.fd.as_raw_fd(),
+        self.register(
             Self::REGISTER_FILES,
             fds.as_ptr() as *const _,
             fds.len() as u32,
@@ -211,7 +209,7 @@ impl<'a> Uring<'a> {
 
     #[inline]
     pub unsafe fn unregister_files(&self) -> Result<()> {
-        sys::io_uring_register(self.fd.as_raw_fd(), Self::UNREGISTER_FILES, ptr::null(), 0)
+        self.register(Self::UNREGISTER_FILES, ptr::null(), 0)
     }
 
     #[inline]
@@ -231,8 +229,7 @@ impl<'a> Uring<'a> {
             ..Default::default()
         };
 
-        sys::io_uring_register(
-            self.fd.as_raw_fd(),
+        self.register(
             Self::REGISTER_FILES_UPDATE,
             &fu as *const _ as *const _,
             fds.len() as u32,
@@ -241,28 +238,17 @@ impl<'a> Uring<'a> {
 
     #[inline]
     pub unsafe fn register_eventfd(&self, event_fd: RawFd) -> Result<()> {
-        sys::io_uring_register(
-            self.fd.as_raw_fd(),
-            Self::REGISTER_EVENTFD,
-            &event_fd as *const _ as *const _,
-            1,
-        )
+        self.register(Self::REGISTER_EVENTFD, &event_fd as *const _ as *const _, 1)
     }
 
     #[inline]
     pub unsafe fn unregister_eventfd(&self) -> Result<()> {
-        sys::io_uring_register(
-            self.fd.as_raw_fd(),
-            Self::UNREGISTER_EVENTFD,
-            ptr::null(),
-            0,
-        )
+        self.register(Self::UNREGISTER_EVENTFD, ptr::null(), 0)
     }
 
     #[inline]
     pub unsafe fn register_eventfd_async(&self, event_fd: RawFd) -> Result<()> {
-        sys::io_uring_register(
-            self.fd.as_raw_fd(),
+        self.register(
             Self::REGISTER_EVENTFD_ASYNC,
             &event_fd as *const _ as *const _,
             1,
@@ -271,22 +257,12 @@ impl<'a> Uring<'a> {
 
     #[inline]
     pub unsafe fn register_personality(&self) -> Result<()> {
-        sys::io_uring_register(
-            self.fd.as_raw_fd(),
-            Self::REGISTER_PERSONALITY,
-            ptr::null(),
-            0,
-        )
+        self.register(Self::REGISTER_PERSONALITY, ptr::null(), 0)
     }
 
     #[inline]
     pub unsafe fn unregister_personality(&self, id: i32) -> Result<()> {
-        sys::io_uring_register(
-            self.fd.as_raw_fd(),
-            Self::UNREGISTER_PERSONALITY,
-            ptr::null(),
-            id as u32,
-        )
+        self.register(Self::UNREGISTER_PERSONALITY, ptr::null(), id as u32)
     }
 
     pub fn probe(&self) -> Result<Box<Probe>> {
