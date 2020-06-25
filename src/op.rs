@@ -1,9 +1,11 @@
-use std::marker::PhantomData;
+use std::io::{IoSlice, IoSliceMut};
+use std::os::unix::io::RawFd;
 use std::ptr;
 
 use crate::sq;
 use crate::Uring;
 
+#[repr(u8)]
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum Code {
     Nop,
@@ -42,40 +44,67 @@ pub(crate) enum Code {
 }
 
 pub trait Op {
-    fn code() -> u8;
+    const CODE: u8;
 
-    fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry>;
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry>;
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct Nop {
-    _marker: PhantomData<()>,
-}
-
-impl Nop {
-    const CODE: Code = Code::Nop;
-
-    #[inline]
-    pub const fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
-    }
-}
+#[derive(Debug, Clone, Copy)]
+pub struct Nop;
 
 impl Op for Nop {
-    #[inline]
-    fn code() -> u8 {
-        Self::CODE as u8
-    }
+    const CODE: u8 = Code::Nop as u8;
 
     #[inline]
-    fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
         uring.sq().prep_rw(Self::CODE, -1, ptr::null(), 0, 0)
     }
 }
 
-pub struct Readv {}
+#[derive(Debug, Clone, Copy)]
+pub struct Readv<'a> {
+    pub fd: RawFd,
+    pub iovecs: &'a [IoSliceMut<'a>],
+    pub offset: u64,
+}
+
+impl Op for Readv<'_> {
+    const CODE: u8 = Code::Readv as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        uring.sq().prep_rw(
+            Self::CODE,
+            self.fd,
+            self.iovecs.as_ptr() as *const _,
+            self.iovecs.len() as u32,
+            self.offset,
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Writev<'a> {
+    pub fd: RawFd,
+    pub iovecs: &'a [IoSlice<'a>],
+    pub offset: u64,
+}
+
+impl Op for Writev<'_> {
+    const CODE: u8 = Code::Writev as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        uring.sq().prep_rw(
+            Self::CODE,
+            self.fd,
+            self.iovecs.as_ptr() as *const _,
+            self.iovecs.len() as u32,
+            self.offset,
+        )
+    }
+}
+
 // #[derive(Clone, Copy, Debug)]
 // pub struct Splice {
 //     fd_in: RawFd,

@@ -247,7 +247,7 @@ impl Queue<'_> {
     #[inline]
     pub(crate) fn prep_rw(
         &mut self,
-        opcode: op::Code,
+        opcode: u8,
         fd: RawFd,
         addr: *const libc::c_void,
         len: u32,
@@ -255,7 +255,7 @@ impl Queue<'_> {
     ) -> Option<&mut Entry> {
         match self.vacate_entry() {
             Some(sqe) => {
-                sqe.opcode = opcode as u8;
+                sqe.opcode = opcode;
                 sqe.flags = 0;
                 sqe.ioprio = 0;
                 sqe.fd = fd;
