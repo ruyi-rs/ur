@@ -115,10 +115,10 @@ impl Entry {
         self.op_flags.poll_events = poll_events;
     }
 
-    // #[inline]
-    // pub(crate) fn set_sync_range_flags(&mut self, sync_rang_flags: u32) {
-    //     self.op_flags.sync_range = sync_rang_flags;
-    // }
+    #[inline]
+    pub(crate) fn set_sync_range_flags(&mut self, sync_rang_flags: u32) {
+        self.op_flags.sync_range = sync_rang_flags;
+    }
 
     #[inline]
     pub(crate) fn set_msg_flags(&mut self, msg_flags: u32) {

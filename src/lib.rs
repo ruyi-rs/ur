@@ -1,6 +1,6 @@
-pub mod sq;
 pub mod cq;
 pub mod op;
+pub mod sq;
 
 mod params;
 mod sys;
