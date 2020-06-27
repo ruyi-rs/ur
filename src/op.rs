@@ -1,3 +1,4 @@
+use std::ffi::CStr;
 use std::io::{IoSlice, IoSliceMut};
 use std::os::unix::io::RawFd;
 use std::ptr;
@@ -428,15 +429,114 @@ impl Op for LinkTimeout<'_> {
 }
 
 #[derive(Clone)]
-pub struct Connect;
+pub struct Connect<'a> {
+    pub fd: RawFd,
+    pub addr: &'a libc::sockaddr,
+    pub addr_len: libc::socklen_t,
+}
+
+impl Op for Connect<'_> {
+    const CODE: u8 = Code::Connect as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        uring.sq().prep_rw(
+            Self::CODE,
+            self.fd,
+            self.addr as *const _ as *const _,
+            0,
+            self.addr_len as u64,
+        )
+    }
+}
+
 #[derive(Clone)]
-pub struct Fallocate;
+pub struct Fallocate {
+    pub fd: RawFd,
+    pub mode: u32,
+    pub offset: u64,
+    pub len: u64,
+}
+
+impl Op for Fallocate {
+    const CODE: u8 = Code::Fallocate as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        uring.sq().prep_rw(
+            Self::CODE,
+            self.fd,
+            self.len as *const _,
+            self.mode,
+            self.offset,
+        )
+    }
+}
+
 #[derive(Clone)]
-pub struct Openat;
+pub struct Openat<'a> {
+    pub dfd: RawFd,
+    pub path: &'a CStr,
+    pub flags: u32,
+    pub mode: u32,
+}
+
+impl Op for Openat<'_> {
+    const CODE: u8 = Code::Openat as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        match uring.sq().prep_rw(
+            Self::CODE,
+            self.dfd,
+            self.path.as_ptr() as *const _,
+            self.mode,
+            0,
+        ) {
+            Some(sqe) => {
+                sqe.set_open_flags(self.flags);
+                Some(sqe)
+            }
+            None => None,
+        }
+    }
+}
+
 #[derive(Clone)]
-pub struct Close;
+pub struct Close {
+    pub fd: RawFd,
+}
+
+impl Op for Close {
+    const CODE: u8 = Code::Close as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        uring.sq().prep_rw(Self::CODE, self.fd, ptr::null(), 0, 0)
+    }
+}
+
 #[derive(Clone)]
-pub struct FilesUpdate;
+pub struct FilesUpdate<'a> {
+    pub fds: &'a [RawFd],
+    pub offset: u32,
+}
+
+impl Op for FilesUpdate<'_> {
+    const CODE: u8 = Code::FilesUpdate as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        uring.sq().prep_rw(
+            Self::CODE,
+            -1,
+            self.fds.as_ptr() as *const _,
+            self.fds.len() as u32,
+            self.offset as u64,
+        )
+    }
+}
+
 #[derive(Clone)]
 pub struct Statx;
 #[derive(Clone)]
