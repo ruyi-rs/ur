@@ -1,5 +1,6 @@
 use std::ffi::CStr;
 use std::io::{IoSlice, IoSliceMut};
+use std::mem;
 use std::os::unix::io::RawFd;
 use std::ptr;
 
@@ -404,7 +405,7 @@ impl Op for Cancel {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug)]
 pub struct LinkTimeout<'a> {
     pub ts: &'a libc::timespec,
     pub flags: u32,
@@ -428,7 +429,7 @@ impl Op for LinkTimeout<'_> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug)]
 pub struct Connect<'a> {
     pub fd: RawFd,
     pub addr: &'a libc::sockaddr,
@@ -450,7 +451,7 @@ impl Op for Connect<'_> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug)]
 pub struct Fallocate {
     pub fd: RawFd,
     pub mode: u32,
@@ -473,7 +474,7 @@ impl Op for Fallocate {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug)]
 pub struct Openat<'a> {
     pub dfd: RawFd,
     pub path: &'a CStr,
@@ -502,7 +503,7 @@ impl Op for Openat<'_> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug)]
 pub struct Close {
     pub fd: RawFd,
 }
@@ -516,7 +517,7 @@ impl Op for Close {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug)]
 pub struct FilesUpdate<'a> {
     pub fds: &'a [RawFd],
     pub offset: u32,
@@ -537,25 +538,242 @@ impl Op for FilesUpdate<'_> {
     }
 }
 
-#[derive(Clone)]
-pub struct Statx;
-#[derive(Clone)]
-pub struct Read;
-#[derive(Clone)]
-pub struct Write;
-#[derive(Clone)]
-pub struct Fadvise;
-#[derive(Clone)]
-pub struct Madvise;
-#[derive(Clone)]
-pub struct Send;
-#[derive(Clone)]
-pub struct Recv;
-#[derive(Clone)]
-pub struct Openat2;
-#[derive(Clone)]
-pub struct EpollCtl;
-#[derive(Clone)]
+#[derive(Debug)]
+pub struct Statx<'a> {
+    pub dfd: RawFd,
+    pub path: &'a CStr,
+    pub flags: u32,
+    pub mask: u32,
+    pub statxbuf: &'a libc::statx,
+}
+
+impl Op for Statx<'_> {
+    const CODE: u8 = Code::Statx as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        match uring.sq().prep_rw(
+            Self::CODE,
+            self.dfd,
+            self.path.as_ptr() as *const _,
+            self.mask,
+            self.statxbuf as *const _ as u64,
+        ) {
+            Some(sqe) => {
+                sqe.set_statx_flags(self.flags);
+                Some(sqe)
+            }
+            None => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Read<'a> {
+    pub fd: RawFd,
+    pub buf: &'a mut [u8],
+    pub offset: u64,
+}
+
+impl Op for Read<'_> {
+    const CODE: u8 = Code::Read as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        uring.sq().prep_rw(
+            Self::CODE,
+            self.fd,
+            self.buf.as_ptr() as *const _,
+            self.buf.len() as u32,
+            self.offset,
+        )
+    }
+}
+
+#[derive(Debug)]
+pub struct Write<'a> {
+    pub fd: RawFd,
+    pub data: &'a [u8],
+    pub offset: u64,
+}
+
+impl Op for Write<'_> {
+    const CODE: u8 = Code::Write as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        uring.sq().prep_rw(
+            Self::CODE,
+            self.fd,
+            self.data.as_ptr() as *const _,
+            self.data.len() as u32,
+            self.offset,
+        )
+    }
+}
+
+#[derive(Debug)]
+pub struct Fadvise {
+    pub fd: RawFd,
+    pub offset: u64,
+    pub len: u32,
+    pub advice: i32,
+}
+
+impl Op for Fadvise {
+    const CODE: u8 = Code::Fadvise as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        match uring
+            .sq()
+            .prep_rw(Self::CODE, self.fd, ptr::null(), self.len, self.offset)
+        {
+            Some(sqe) => {
+                sqe.set_fadvise_advice_flags(self.advice as u32);
+                Some(sqe)
+            }
+            None => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Madvise<'a> {
+    pub mem: &'a [u8],
+    pub advice: i32,
+}
+
+impl Op for Madvise<'_> {
+    const CODE: u8 = Code::Madvise as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        match uring.sq().prep_rw(
+            Self::CODE,
+            -1,
+            self.mem.as_ptr() as *const _,
+            self.mem.len() as u32,
+            0,
+        ) {
+            Some(sqe) => {
+                sqe.set_fadvise_advice_flags(self.advice as u32);
+                Some(sqe)
+            }
+            None => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Send<'a> {
+    pub sockfd: RawFd,
+    pub data: &'a [u8],
+    pub flags: u32,
+}
+
+impl Op for Send<'_> {
+    const CODE: u8 = Code::Send as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        match uring.sq().prep_rw(
+            Self::CODE,
+            self.sockfd,
+            self.data.as_ptr() as *const _,
+            self.data.len() as u32,
+            0,
+        ) {
+            Some(sqe) => {
+                sqe.set_msg_flags(self.flags);
+                Some(sqe)
+            }
+            None => None,
+        }
+    }
+}
+#[derive(Debug)]
+pub struct Recv<'a> {
+    pub sockfd: RawFd,
+    pub buf: &'a mut [u8],
+    pub flags: u32,
+}
+
+impl Op for Recv<'_> {
+    const CODE: u8 = Code::Recv as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        match uring.sq().prep_rw(
+            Self::CODE,
+            self.sockfd,
+            self.buf.as_ptr() as *const _,
+            self.buf.len() as u32,
+            0,
+        ) {
+            Some(sqe) => {
+                sqe.set_msg_flags(self.flags);
+                Some(sqe)
+            }
+            None => None,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct OpenHow {
+    flags: u64,
+    mode: u64,
+    resolve: u64,
+}
+
+#[derive(Debug)]
+pub struct Openat2<'a> {
+    pub dfd: RawFd,
+    pub path: &'a CStr,
+    pub how: &'a OpenHow,
+}
+
+impl Op for Openat2<'_> {
+    const CODE: u8 = Code::Openat2 as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        uring.sq().prep_rw(
+            Self::CODE,
+            self.dfd,
+            self.path.as_ptr() as *const _,
+            mem::size_of::<OpenHow>() as u32,
+            self.how as *const _ as u64,
+        )
+    }
+}
+
+#[derive(Debug)]
+pub struct EpollCtl<'a> {
+    pub epfd: RawFd,
+    pub fd: RawFd,
+    pub op: u32,
+    pub ev: &'a libc::epoll_event,
+}
+
+impl Op for EpollCtl<'_> {
+    const CODE: u8 = Code::EpollCtl as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        uring.sq().prep_rw(
+            Self::CODE,
+            self.epfd,
+            self.ev as *const _ as *const _,
+            self.op,
+            self.fd as u64,
+        )
+    }
+}
+
+#[derive(Debug)]
 pub struct Splice {
     pub fd_in: RawFd,
     pub off_in: u64,
@@ -564,7 +782,76 @@ pub struct Splice {
     pub nbytes: u32,
     pub flags: u32,
 }
-#[derive(Clone)]
-pub struct ProvideBuffers;
-#[derive(Clone)]
-pub struct RemoveBuffers;
+
+impl Op for Splice {
+    const CODE: u8 = Code::Splice as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        match uring.sq().prep_rw(
+            Self::CODE,
+            self.fd_out,
+            ptr::null(),
+            self.nbytes,
+            self.off_out,
+        ) {
+            Some(sqe) => {
+                sqe.set_splice_off_in(self.off_in);
+                sqe.set_splice_fd_in(self.fd_in);
+                sqe.set_splice_flags(self.flags);
+                Some(sqe)
+            }
+            None => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ProvideBuffers<'a> {
+    pub addr: &'a [u8],
+    pub nr: i32,
+    pub bgid: u16,
+    pub bid: u32,
+}
+
+impl Op for ProvideBuffers<'_> {
+    const CODE: u8 = Code::ProvideBuffers as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        match uring.sq().prep_rw(
+            Self::CODE,
+            self.nr,
+            self.addr.as_ptr() as *const _,
+            self.addr.len() as u32,
+            self.bid as u64,
+        ) {
+            Some(sqe) => {
+                sqe.set_buf_group(self.bgid);
+                Some(sqe)
+            }
+            None => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct RemoveBuffers {
+    pub nr: i32,
+    pub bgid: u16,
+}
+
+impl Op for RemoveBuffers {
+    const CODE: u8 = Code::RemoveBuffers as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        match uring.sq().prep_rw(Self::CODE, self.nr, ptr::null(), 0, 0) {
+            Some(sqe) => {
+                sqe.set_buf_group(self.bgid);
+                Some(sqe)
+            }
+            None => None,
+        }
+    }
+}

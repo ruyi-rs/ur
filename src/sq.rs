@@ -3,7 +3,6 @@ use std::os::unix::io::RawFd;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use crate::op;
 use crate::params::UringParams;
 use crate::uring::Mmap;
 
@@ -99,11 +98,6 @@ impl Entry {
     pub(crate) fn set_buf_group(&mut self, buf_group: u16) {
         self.buf_index_group = buf_group;
     }
-
-    // #[inline]
-    // pub(crate) fn set_rw_flags(&mut self, rw_flags: i32) {
-    //     self.op_flags.rw = rw_flags;
-    // }
 
     #[inline]
     pub(crate) fn set_fsync_flags(&mut self, fsync_flags: u32) {
