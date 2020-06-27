@@ -353,6 +353,11 @@ impl<'a> Uring<'a> {
             }
             if ret == submit {
                 submit = 0;
+
+                // When Setup::IOPOLL is set, sys::io_uring enter()
+                // must be called to reap new completions but the call
+                // won't be made if both wait_nr and submit are zero
+                // so preserve wait_nr.
                 if !self.flags.contains(Setup::IOPOLL) {
                     wait_nr = 0;
                 }
