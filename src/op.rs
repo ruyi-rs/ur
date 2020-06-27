@@ -1,4 +1,3 @@
-use std::fmt;
 use std::io::{IoSlice, IoSliceMut};
 use std::os::unix::io::RawFd;
 use std::ptr;
@@ -249,6 +248,7 @@ impl Op for SyncFileRange {
     }
 }
 
+#[derive(Debug)]
 pub struct SendMsg<'a> {
     pub fd: RawFd,
     pub msg: &'a libc::msghdr,
@@ -273,13 +273,7 @@ impl Op for SendMsg<'_> {
     }
 }
 
-impl fmt::Debug for SendMsg<'_> {
-    #[inline]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "SendMsg {{ fd: {}, msg: msghdr {{ msg_name: {:#x}, msg_namelen: {}, msg_iov: {:#x}, msg_iovlen: {}, msg_control: {:#x}, msg_controllen: {}, msg_flags: {} }}, flags: {} }}", self.fd, self.msg.msg_name as u64, self.msg.msg_namelen, self.msg.msg_iov as u64, self.msg.msg_iovlen, self.msg.msg_control as u64, self.msg.msg_controllen, self.msg.msg_flags, self.flags)
-    }
-}
-
+#[derive(Debug)]
 pub struct RecvMsg<'a> {
     pub fd: RawFd,
     pub msg: &'a mut libc::msghdr,
@@ -304,19 +298,173 @@ impl Op for RecvMsg<'_> {
     }
 }
 
-impl fmt::Debug for RecvMsg<'_> {
+#[derive(Debug)]
+pub struct Timeout<'a> {
+    pub ts: &'a libc::timespec,
+    pub count: u32,
+    pub flags: u32,
+}
+
+impl Op for Timeout<'_> {
+    const CODE: u8 = Code::Timeout as u8;
+
     #[inline]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "RecvMsg {{ fd: {}, msg: msghdr {{ msg_name: {:#x}, msg_namelen: {}, msg_iov: {:#x}, msg_iovlen: {}, msg_control: {:#x}, msg_controllen: {}, msg_flags: {} }}, flags: {} }}", self.fd, self.msg.msg_name as u64, self.msg.msg_namelen, self.msg.msg_iov as u64, self.msg.msg_iovlen, self.msg.msg_control as u64, self.msg.msg_controllen, self.msg.msg_flags, self.flags)
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        match uring.sq().prep_rw(
+            Self::CODE,
+            -1,
+            self.ts as *const _ as *const _,
+            1,
+            self.count as u64,
+        ) {
+            Some(sqe) => {
+                sqe.set_timeout_flags(self.flags);
+                Some(sqe)
+            }
+            None => None,
+        }
     }
 }
 
-// #[derive(Clone, Copy, Debug)]
-// pub struct Splice {
-//     fd_in: RawFd,
-//     off_in: u64,
-//     fd_out: RawFd,
-//     off_out: u64,
-//     nbytes: u32,
-//     splice_flags: u32,
-// }
+#[derive(Debug)]
+pub struct TimeoutRemove {
+    pub user_data: u64,
+    pub flags: u32,
+}
+
+impl Op for TimeoutRemove {
+    const CODE: u8 = Code::TimeoutRemove as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        match uring
+            .sq()
+            .prep_rw(Self::CODE, -1, self.user_data as *const _, 0, 0)
+        {
+            Some(sqe) => {
+                sqe.set_timeout_flags(self.flags);
+                Some(sqe)
+            }
+            None => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Accept<'a> {
+    pub fd: RawFd,
+    pub addr: &'a mut libc::sockaddr,
+    pub addr_len: &'a mut libc::socklen_t,
+    pub flags: u32,
+}
+
+impl Op for Accept<'_> {
+    const CODE: u8 = Code::Accept as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        match uring.sq().prep_rw(
+            Self::CODE,
+            self.fd,
+            self.addr as *const _ as *const _,
+            0,
+            self.addr_len as *const _ as u64,
+        ) {
+            Some(sqe) => {
+                sqe.set_accept_flags(self.flags);
+                Some(sqe)
+            }
+            None => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Cancel {
+    pub user_data: u64,
+    pub flags: u32,
+}
+
+impl Op for Cancel {
+    const CODE: u8 = Code::AsyncCancel as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        match uring
+            .sq()
+            .prep_rw(Self::CODE, -1, self.user_data as *const _, 0, 0)
+        {
+            Some(sqe) => {
+                sqe.set_cancel_flags(self.flags);
+                Some(sqe)
+            }
+            None => None,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct LinkTimeout<'a> {
+    pub ts: &'a libc::timespec,
+    pub flags: u32,
+}
+
+impl Op for LinkTimeout<'_> {
+    const CODE: u8 = Code::LinkTimeout as u8;
+
+    #[inline]
+    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
+        match uring
+            .sq()
+            .prep_rw(Self::CODE, -1, self.ts as *const _ as *const _, 1, 0)
+        {
+            Some(sqe) => {
+                sqe.set_timeout_flags(self.flags);
+                Some(sqe)
+            }
+            None => None,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct Connect;
+#[derive(Clone)]
+pub struct Fallocate;
+#[derive(Clone)]
+pub struct Openat;
+#[derive(Clone)]
+pub struct Close;
+#[derive(Clone)]
+pub struct FilesUpdate;
+#[derive(Clone)]
+pub struct Statx;
+#[derive(Clone)]
+pub struct Read;
+#[derive(Clone)]
+pub struct Write;
+#[derive(Clone)]
+pub struct Fadvise;
+#[derive(Clone)]
+pub struct Madvise;
+#[derive(Clone)]
+pub struct Send;
+#[derive(Clone)]
+pub struct Recv;
+#[derive(Clone)]
+pub struct Openat2;
+#[derive(Clone)]
+pub struct EpollCtl;
+#[derive(Clone)]
+pub struct Splice {
+    pub fd_in: RawFd,
+    pub off_in: u64,
+    pub fd_out: RawFd,
+    pub off_out: u64,
+    pub nbytes: u32,
+    pub flags: u32,
+}
+#[derive(Clone)]
+pub struct ProvideBuffers;
+#[derive(Clone)]
+pub struct RemoveBuffers;

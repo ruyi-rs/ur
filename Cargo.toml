@@ -14,7 +14,10 @@ categories = ["asynchronous", "filesystem", "network-programming"]
 include = ["Cargo.toml", "src/**/*.rs", "README.md", "LICENSE-APACHE", "LICENSE-MIT"]
 
 [dependencies]
-libc = "0.2"
 bitflags = "1.2"
 ruyi-slab = "0.1"
+
+[dependencies.libc]
+version = "0.2"
+features = ["extra_traits"]
 
