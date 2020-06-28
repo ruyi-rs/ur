@@ -7,4 +7,4 @@ mod sys;
 mod uring;
 
 pub use params::UringBuilder;
-pub use uring::{OpenHow, Uring};
+pub use uring::Uring;

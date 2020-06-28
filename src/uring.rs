@@ -3,20 +3,13 @@ use std::fmt;
 use std::io::{Error, IoSliceMut, Result};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::ptr;
+use std::time::Duration;
 
 use bitflags::bitflags;
 
 use crate::op::Op;
 use crate::params::{Setup, UringBuilder};
 use crate::{cq, sq, sys};
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct OpenHow {
-    flags: u64,
-    mode: u64,
-    resolve: u64,
-}
 
 #[derive(Debug)]
 pub(crate) struct Fd(RawFd);
@@ -300,6 +293,20 @@ impl<'a> Uring<'a> {
     #[inline]
     pub fn wait_cqe(&mut self) -> Result<cq::Entry> {
         self.get_cqe(0, 1, None)
+    }
+
+    pub fn wait_cqes(
+        &mut self,
+        wait_nr: u32,
+        timeout: Option<Duration>,
+        sigmask: Option<&libc::sigset_t>,
+    ) -> Result<cq::Entry> {
+        todo!()
+    }
+
+    #[inline]
+    pub fn wait_cqe_timeout(&mut self, timeout: Option<Duration>) -> Result<cq::Entry> {
+        self.wait_cqes(1, timeout, None)
     }
 
     #[inline]

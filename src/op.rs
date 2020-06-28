@@ -723,9 +723,9 @@ impl Op for Recv<'_> {
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct OpenHow {
-    flags: u64,
-    mode: u64,
-    resolve: u64,
+    pub flags: u64,
+    pub mode: u64,
+    pub resolve: u64,
 }
 
 #[derive(Debug)]
