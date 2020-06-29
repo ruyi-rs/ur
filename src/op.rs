@@ -5,7 +5,6 @@ use std::os::unix::io::RawFd;
 use std::ptr;
 
 use crate::sq;
-use crate::Uring;
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone)]
