@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use bitflags::bitflags;
 
-use crate::op::Op;
+use crate::op::{self, Op};
 use crate::params::{Setup, UringBuilder};
 use crate::{cq, sq, sys};
 
@@ -143,6 +143,7 @@ pub struct Uring<'a> {
     cq: cq::Queue<'a>,
     flags: Setup,
     fd: Fd,
+    ts: libc::timespec,
 }
 
 impl<'a> Uring<'a> {
@@ -161,7 +162,16 @@ impl<'a> Uring<'a> {
 
     #[inline]
     pub(crate) fn new(sq: sq::Queue<'a>, cq: cq::Queue<'a>, flags: Setup, fd: Fd) -> Self {
-        Self { sq, cq, flags, fd }
+        Self {
+            sq,
+            cq,
+            flags,
+            fd,
+            ts: libc::timespec {
+                tv_sec: 0,
+                tv_nsec: 0,
+            },
+        }
     }
 
     #[inline]
@@ -301,7 +311,21 @@ impl<'a> Uring<'a> {
         timeout: Option<Duration>,
         sigmask: Option<&libc::sigset_t>,
     ) -> Result<cq::Entry> {
-        todo!()
+        let mut to_submit = 0;
+        if let Some(dur) = timeout {
+            self.ts = libc::timespec {
+                tv_sec: dur.as_secs() as libc::time_t,
+                tv_nsec: dur.subsec_nanos() as libc::c_long,
+            };
+            let sqe = op::Timeout {
+                ts: &self.ts,
+                count: wait_nr,
+                flags: 0,
+            }
+            .prepare(&mut self.sq);
+        }
+
+        self.get_cqe(to_submit, wait_nr, sigmask)
     }
 
     #[inline]

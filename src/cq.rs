@@ -64,7 +64,7 @@ impl Entry {
 }
 
 #[derive(Debug)]
-pub(crate) struct Queue<'a> {
+pub struct Queue<'a> {
     khead: &'a AtomicU32,
     ktail: &'a AtomicU32,
     kring_mask: u32,
@@ -83,7 +83,7 @@ impl Queue<'_> {
     const UDATA_TIMEOUT: u64 = -1i64 as u64;
 
     #[inline]
-    pub fn new(ring_ptr: Rc<Mmap<libc::c_void>>, params: &UringParams) -> Self {
+    pub(crate) fn new(ring_ptr: Rc<Mmap<libc::c_void>>, params: &UringParams) -> Self {
         let ptr = ring_ptr.as_mut_ptr();
         let cq_off = params.cq_off();
         unsafe {
@@ -111,7 +111,7 @@ impl Queue<'_> {
         self.koverflow.load(Ordering::Relaxed)
     }
 
-    pub fn peek_cqe(&mut self) -> Result<Option<&Entry>> {
+    pub(crate) fn peek_cqe(&mut self) -> Result<Option<&Entry>> {
         loop {
             if self.khead_shadow == self.ktail_shadow {
                 self.ktail_shadow = self.ktail.load(Ordering::Acquire);
@@ -135,7 +135,7 @@ impl Queue<'_> {
     }
 
     #[inline]
-    pub fn advance(&mut self, n: u32) {
+    pub(crate) fn advance(&mut self, n: u32) {
         if n > 0 {
             self.khead_shadow = self.khead_shadow.wrapping_add(n);
             self.khead.store(self.khead_shadow, Ordering::Release);

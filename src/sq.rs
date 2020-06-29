@@ -153,10 +153,15 @@ impl Entry {
     pub(crate) fn set_splice_flags(&mut self, splice_flags: u32) {
         self.op_flags.splice = splice_flags;
     }
+
+    #[inline]
+    pub fn set_user_data(&mut self, user_data: u64) {
+        self.user_data = user_data;
+    }
 }
 
 #[derive(Debug)]
-pub(crate) struct Queue<'a> {
+pub struct Queue<'a> {
     khead: &'a AtomicU32,
     ktail: &'a AtomicU32,
     kring_mask: u32,
@@ -220,7 +225,7 @@ impl Queue<'_> {
     }
 
     #[inline]
-    pub(crate) fn dropped(&self) -> u32 {
+    pub fn dropped(&self) -> u32 {
         self.kdropped.load(Ordering::Relaxed)
     }
 

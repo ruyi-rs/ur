@@ -48,7 +48,7 @@ pub(crate) enum Code {
 pub trait Op {
     const CODE: u8;
 
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry>;
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry>;
 }
 
 #[derive(Debug)]
@@ -58,8 +58,8 @@ impl Op for Nop {
     const CODE: u8 = Code::Nop as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        uring.sq().prep_rw(Self::CODE, -1, ptr::null(), 0, 0)
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        sq.prep_rw(Self::CODE, -1, ptr::null(), 0, 0)
     }
 }
 
@@ -74,8 +74,8 @@ impl Op for Readv<'_> {
     const CODE: u8 = Code::Readv as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        sq.prep_rw(
             Self::CODE,
             self.fd,
             self.iovecs.as_ptr() as *const _,
@@ -96,8 +96,8 @@ impl Op for Writev<'_> {
     const CODE: u8 = Code::Writev as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        sq.prep_rw(
             Self::CODE,
             self.fd,
             self.iovecs.as_ptr() as *const _,
@@ -117,8 +117,8 @@ impl Op for Fsync {
     const CODE: u8 = Code::Fsync as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring.sq().prep_rw(Self::CODE, self.fd, ptr::null(), 0, 0) {
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(Self::CODE, self.fd, ptr::null(), 0, 0) {
             Some(sqe) => {
                 sqe.set_fsync_flags(self.flags);
                 Some(sqe)
@@ -140,8 +140,8 @@ impl Op for ReadFixed<'_> {
     const CODE: u8 = Code::ReadFixed as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(
             Self::CODE,
             self.fd,
             self.buf.as_ptr() as *const _,
@@ -169,8 +169,8 @@ impl Op for WriteFixed<'_> {
     const CODE: u8 = Code::WriteFixed as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(
             Self::CODE,
             self.fd,
             self.buf.as_ptr() as *const _,
@@ -196,8 +196,8 @@ impl Op for PollAdd {
     const CODE: u8 = Code::PollAdd as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring.sq().prep_rw(Self::CODE, self.fd, ptr::null(), 0, 0) {
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(Self::CODE, self.fd, ptr::null(), 0, 0) {
             Some(sqe) => {
                 sqe.set_poll_events(self.poll_mask);
                 Some(sqe)
@@ -217,10 +217,8 @@ impl Op for PollRemove {
     const CODE: u8 = Code::PollRemove as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        uring
-            .sq()
-            .prep_rw(Self::CODE, self.fd, self.user_data as _, 0, 0)
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        sq.prep_rw(Self::CODE, self.fd, self.user_data as _, 0, 0)
     }
 }
 
@@ -236,11 +234,8 @@ impl Op for SyncFileRange {
     const CODE: u8 = Code::SyncFileRange as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring
-            .sq()
-            .prep_rw(Self::CODE, self.fd, ptr::null(), self.len, self.offset)
-        {
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(Self::CODE, self.fd, ptr::null(), self.len, self.offset) {
             Some(sqe) => {
                 sqe.set_sync_range_flags(self.flags);
                 Some(sqe)
@@ -261,11 +256,8 @@ impl Op for SendMsg<'_> {
     const CODE: u8 = Code::SendMsg as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring
-            .sq()
-            .prep_rw(Self::CODE, self.fd, self.msg as *const _ as *const _, 1, 0)
-        {
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(Self::CODE, self.fd, self.msg as *const _ as *const _, 1, 0) {
             Some(sqe) => {
                 sqe.set_msg_flags(self.flags);
                 Some(sqe)
@@ -286,11 +278,8 @@ impl Op for RecvMsg<'_> {
     const CODE: u8 = Code::RecvMsg as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring
-            .sq()
-            .prep_rw(Self::CODE, self.fd, self.msg as *const _ as *const _, 1, 0)
-        {
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(Self::CODE, self.fd, self.msg as *const _ as *const _, 1, 0) {
             Some(sqe) => {
                 sqe.set_msg_flags(self.flags);
                 Some(sqe)
@@ -311,8 +300,8 @@ impl Op for Timeout<'_> {
     const CODE: u8 = Code::Timeout as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(
             Self::CODE,
             -1,
             self.ts as *const _ as *const _,
@@ -338,11 +327,8 @@ impl Op for TimeoutRemove {
     const CODE: u8 = Code::TimeoutRemove as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring
-            .sq()
-            .prep_rw(Self::CODE, -1, self.user_data as *const _, 0, 0)
-        {
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(Self::CODE, -1, self.user_data as *const _, 0, 0) {
             Some(sqe) => {
                 sqe.set_timeout_flags(self.flags);
                 Some(sqe)
@@ -364,8 +350,8 @@ impl Op for Accept<'_> {
     const CODE: u8 = Code::Accept as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(
             Self::CODE,
             self.fd,
             self.addr as *const _ as *const _,
@@ -391,11 +377,8 @@ impl Op for Cancel {
     const CODE: u8 = Code::AsyncCancel as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring
-            .sq()
-            .prep_rw(Self::CODE, -1, self.user_data as *const _, 0, 0)
-        {
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(Self::CODE, -1, self.user_data as *const _, 0, 0) {
             Some(sqe) => {
                 sqe.set_cancel_flags(self.flags);
                 Some(sqe)
@@ -415,11 +398,8 @@ impl Op for LinkTimeout<'_> {
     const CODE: u8 = Code::LinkTimeout as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring
-            .sq()
-            .prep_rw(Self::CODE, -1, self.ts as *const _ as *const _, 1, 0)
-        {
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(Self::CODE, -1, self.ts as *const _ as *const _, 1, 0) {
             Some(sqe) => {
                 sqe.set_timeout_flags(self.flags);
                 Some(sqe)
@@ -440,8 +420,8 @@ impl Op for Connect<'_> {
     const CODE: u8 = Code::Connect as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        sq.prep_rw(
             Self::CODE,
             self.fd,
             self.addr as *const _ as *const _,
@@ -463,8 +443,8 @@ impl Op for Fallocate {
     const CODE: u8 = Code::Fallocate as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        sq.prep_rw(
             Self::CODE,
             self.fd,
             self.len as *const _,
@@ -486,8 +466,8 @@ impl Op for Openat<'_> {
     const CODE: u8 = Code::Openat as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(
             Self::CODE,
             self.dfd,
             self.path.as_ptr() as *const _,
@@ -512,8 +492,8 @@ impl Op for Close {
     const CODE: u8 = Code::Close as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        uring.sq().prep_rw(Self::CODE, self.fd, ptr::null(), 0, 0)
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        sq.prep_rw(Self::CODE, self.fd, ptr::null(), 0, 0)
     }
 }
 
@@ -527,8 +507,8 @@ impl Op for FilesUpdate<'_> {
     const CODE: u8 = Code::FilesUpdate as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        sq.prep_rw(
             Self::CODE,
             -1,
             self.fds.as_ptr() as *const _,
@@ -551,8 +531,8 @@ impl Op for Statx<'_> {
     const CODE: u8 = Code::Statx as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(
             Self::CODE,
             self.dfd,
             self.path.as_ptr() as *const _,
@@ -579,8 +559,8 @@ impl Op for Read<'_> {
     const CODE: u8 = Code::Read as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        sq.prep_rw(
             Self::CODE,
             self.fd,
             self.buf.as_ptr() as *const _,
@@ -601,8 +581,8 @@ impl Op for Write<'_> {
     const CODE: u8 = Code::Write as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        sq.prep_rw(
             Self::CODE,
             self.fd,
             self.data.as_ptr() as *const _,
@@ -624,11 +604,8 @@ impl Op for Fadvise {
     const CODE: u8 = Code::Fadvise as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring
-            .sq()
-            .prep_rw(Self::CODE, self.fd, ptr::null(), self.len, self.offset)
-        {
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(Self::CODE, self.fd, ptr::null(), self.len, self.offset) {
             Some(sqe) => {
                 sqe.set_fadvise_advice_flags(self.advice as u32);
                 Some(sqe)
@@ -648,8 +625,8 @@ impl Op for Madvise<'_> {
     const CODE: u8 = Code::Madvise as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(
             Self::CODE,
             -1,
             self.mem.as_ptr() as *const _,
@@ -676,8 +653,8 @@ impl Op for Send<'_> {
     const CODE: u8 = Code::Send as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(
             Self::CODE,
             self.sockfd,
             self.data.as_ptr() as *const _,
@@ -703,8 +680,8 @@ impl Op for Recv<'_> {
     const CODE: u8 = Code::Recv as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(
             Self::CODE,
             self.sockfd,
             self.buf.as_ptr() as *const _,
@@ -739,8 +716,8 @@ impl Op for Openat2<'_> {
     const CODE: u8 = Code::Openat2 as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        sq.prep_rw(
             Self::CODE,
             self.dfd,
             self.path.as_ptr() as *const _,
@@ -762,8 +739,8 @@ impl Op for EpollCtl<'_> {
     const CODE: u8 = Code::EpollCtl as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        sq.prep_rw(
             Self::CODE,
             self.epfd,
             self.ev as *const _ as *const _,
@@ -787,8 +764,8 @@ impl Op for Splice {
     const CODE: u8 = Code::Splice as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(
             Self::CODE,
             self.fd_out,
             ptr::null(),
@@ -818,8 +795,8 @@ impl Op for ProvideBuffers<'_> {
     const CODE: u8 = Code::ProvideBuffers as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring.sq().prep_rw(
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(
             Self::CODE,
             self.nr,
             self.addr.as_ptr() as *const _,
@@ -845,8 +822,8 @@ impl Op for RemoveBuffers {
     const CODE: u8 = Code::RemoveBuffers as u8;
 
     #[inline]
-    unsafe fn prepare<'a>(&self, uring: &'a mut Uring) -> Option<&'a mut sq::Entry> {
-        match uring.sq().prep_rw(Self::CODE, self.nr, ptr::null(), 0, 0) {
+    unsafe fn prepare<'a>(&self, sq: &'a mut sq::Queue) -> Option<&'a mut sq::Entry> {
+        match sq.prep_rw(Self::CODE, self.nr, ptr::null(), 0, 0) {
             Some(sqe) => {
                 sqe.set_buf_group(self.bgid);
                 Some(sqe)
