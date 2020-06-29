@@ -317,12 +317,20 @@ impl<'a> Uring<'a> {
                 tv_sec: dur.as_secs() as libc::time_t,
                 tv_nsec: dur.subsec_nanos() as libc::c_long,
             };
-            let sqe = op::Timeout {
-                ts: &self.ts,
-                count: wait_nr,
-                flags: 0,
+            match unsafe {
+                op::Timeout {
+                    ts: &self.ts,
+                    count: wait_nr,
+                    flags: 0,
+                }
+                .prepare(&mut self.sq)
+            } {
+                Some(sqe) => {
+                    sqe.set_user_data(cq::Queue::UDATA_TIMEOUT);
+                    to_submit = self.sq.flush();
+                }
+                None => return Err(Error::from_raw_os_error(libc::EAGAIN)),
             }
-            .prepare(&mut self.sq);
         }
 
         self.get_cqe(to_submit, wait_nr, sigmask)
@@ -344,8 +352,18 @@ impl<'a> Uring<'a> {
     }
 
     #[inline]
-    pub(crate) fn sq(&mut self) -> &mut sq::Queue<'a> {
+    pub fn sq_mut(&mut self) -> &mut sq::Queue<'a> {
         &mut self.sq
+    }
+
+    #[inline]
+    pub fn sq(&self) -> &sq::Queue<'a> {
+        &self.sq
+    }
+
+    #[inline]
+    pub fn cq(&self) -> &cq::Queue<'a> {
+        &self.cq
     }
 
     fn get_cqe(

@@ -80,7 +80,7 @@ pub struct Queue<'a> {
 }
 
 impl Queue<'_> {
-    const UDATA_TIMEOUT: u64 = -1i64 as u64;
+    pub(crate) const UDATA_TIMEOUT: u64 = -1i64 as u64;
 
     #[inline]
     pub(crate) fn new(ring_ptr: Rc<Mmap<libc::c_void>>, params: &UringParams) -> Self {
