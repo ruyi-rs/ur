@@ -327,7 +327,7 @@ impl<'a> Uring<'a> {
             } {
                 Some(sqe) => {
                     sqe.set_user_data(cq::Queue::UDATA_TIMEOUT);
-                    to_submit = self.sq.flush();
+                    to_submit = self.sq_mut().flush();
                 }
                 None => return Err(Error::from_raw_os_error(libc::EAGAIN)),
             }
@@ -339,16 +339,6 @@ impl<'a> Uring<'a> {
     #[inline]
     pub fn wait_cqe_timeout(&mut self, timeout: Option<Duration>) -> Result<cq::Entry> {
         self.wait_cqes(1, timeout, None)
-    }
-
-    #[inline]
-    pub fn sq_dropped(&self) -> u32 {
-        self.sq.dropped()
-    }
-
-    #[inline]
-    pub fn cq_overflow(&self) -> u32 {
-        self.cq.overflow()
     }
 
     #[inline]
