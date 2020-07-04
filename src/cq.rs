@@ -111,7 +111,7 @@ impl Queue<'_> {
         self.koverflow.load(Ordering::Relaxed)
     }
 
-    pub(crate) fn peek_cqe(&mut self) -> Result<Option<&Entry>> {
+    pub fn peek_cqe(&mut self) -> Result<Option<&Entry>> {
         loop {
             if self.khead_shadow == self.ktail_shadow {
                 self.ktail_shadow = self.ktail.load(Ordering::Acquire);
@@ -135,7 +135,7 @@ impl Queue<'_> {
     }
 
     #[inline]
-    pub(crate) fn advance(&mut self, n: u32) {
+    pub fn advance(&mut self, n: u32) {
         if n > 0 {
             self.khead_shadow = self.khead_shadow.wrapping_add(n);
             self.khead.store(self.khead_shadow, Ordering::Release);

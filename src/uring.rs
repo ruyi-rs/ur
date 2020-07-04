@@ -277,6 +277,11 @@ impl<'a> Uring<'a> {
     }
 
     #[inline]
+    pub unsafe fn prepare<T: Op>(&mut self, op: &T) -> Option<&mut sq::Entry> {
+        op.prepare(self.as_sq_mut())
+    }
+
+    #[inline]
     pub fn submit(&mut self) -> Result<u32> {
         self.submit_and_wait(0)
     }
@@ -327,7 +332,7 @@ impl<'a> Uring<'a> {
             } {
                 Some(sqe) => {
                     sqe.set_user_data(cq::Queue::UDATA_TIMEOUT);
-                    to_submit = self.sq_mut().flush();
+                    to_submit = self.as_sq_mut().flush();
                 }
                 None => return Err(Error::from_raw_os_error(libc::EAGAIN)),
             }
@@ -342,18 +347,23 @@ impl<'a> Uring<'a> {
     }
 
     #[inline]
-    pub fn sq_mut(&mut self) -> &mut sq::Queue<'a> {
-        &mut self.sq
-    }
-
-    #[inline]
-    pub fn sq(&self) -> &sq::Queue<'a> {
+    pub fn as_sq(&self) -> &sq::Queue<'a> {
         &self.sq
     }
 
     #[inline]
-    pub fn cq(&self) -> &cq::Queue<'a> {
+    pub fn as_sq_mut(&mut self) -> &mut sq::Queue<'a> {
+        &mut self.sq
+    }
+
+    #[inline]
+    pub fn as_cq(&self) -> &cq::Queue<'a> {
         &self.cq
+    }
+
+    #[inline]
+    pub fn as_cq_mut(&mut self) -> &mut cq::Queue<'a> {
+        &mut self.cq
     }
 
     fn get_cqe(
