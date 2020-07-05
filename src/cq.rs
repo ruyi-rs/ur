@@ -141,4 +141,9 @@ impl Queue<'_> {
             self.khead.store(self.khead_shadow, Ordering::Release);
         }
     }
+
+    #[inline]
+    pub(crate) fn ring_ptr(&self) -> &Mmap<libc::c_void> {
+        &self.ring_ptr
+    }
 }

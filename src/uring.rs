@@ -64,6 +64,11 @@ impl<T> Mmap<T> {
     pub const fn as_mut_ptr(&self) -> *mut T {
         self.addr.as_ptr()
     }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.len
+    }
 }
 
 impl<T> Drop for Mmap<T> {
@@ -274,6 +279,30 @@ impl<'a> Uring<'a> {
             sys::io_uring_register(self.fd.as_raw_fd(), Self::REGISTER_PROBE, ptr, 256)?;
         }
         Ok(probe)
+    }
+
+    pub fn dontfork(&self) -> Result<()> {
+        unsafe {
+            let sqes = self.as_sq().sqes();
+            sys::madvise(sqes.as_mut_ptr() as *mut _, sqes.len(), libc::MADV_DONTFORK)?;
+
+            let sq_ring_ptr = self.as_sq().ring_ptr();
+            sys::madvise(
+                sq_ring_ptr.as_mut_ptr(),
+                sq_ring_ptr.len(),
+                libc::MADV_DONTFORK,
+            )?;
+
+            let cq_ring_ptr = self.as_cq().ring_ptr();
+            if sq_ring_ptr.as_mut_ptr() != cq_ring_ptr.as_mut_ptr() {
+                sys::madvise(
+                    cq_ring_ptr.as_mut_ptr(),
+                    cq_ring_ptr.len(),
+                    libc::MADV_DONTFORK,
+                )?;
+            }
+        }
+        Ok(())
     }
 
     #[inline]

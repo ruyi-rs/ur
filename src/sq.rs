@@ -292,4 +292,14 @@ impl Queue<'_> {
     pub(crate) fn need_wakeup(&self) -> bool {
         (self.kflags.load(Ordering::Relaxed) & Self::NEED_WAKEUP) != 0
     }
+
+    #[inline]
+    pub(crate) fn sqes(&self) -> &Mmap<Entry> {
+        &self.sqes
+    }
+
+    #[inline]
+    pub(crate) fn ring_ptr(&self) -> &Mmap<libc::c_void> {
+        &self.ring_ptr
+    }
 }

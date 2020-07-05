@@ -122,3 +122,9 @@ pub unsafe fn munmap(addr: *mut libc::c_void, len: usize) -> Result<()> {
     let ret = libc::munmap(addr, len);
     cvt(ret).and(Ok(()))
 }
+
+#[inline]
+pub unsafe fn madvise(addr: *mut libc::c_void, len: usize, advice: libc::c_int) -> Result<()> {
+    let ret = libc::madvise(addr, len, advice);
+    cvt(ret).and(Ok(()))
+}
