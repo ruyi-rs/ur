@@ -1,4 +1,4 @@
-use std::io::Result;
+use std::io::{Error, Result};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -69,7 +69,7 @@ pub struct Queue<'a> {
     ktail: &'a AtomicU32,
     kring_mask: u32,
     kring_entries: u32,
-    kflags: &'a AtomicU32,
+    kflags: Option<&'a AtomicU32>,
     koverflow: &'a AtomicU32,
     cqes: *const Entry,
 
@@ -81,6 +81,7 @@ pub struct Queue<'a> {
 
 impl Queue<'_> {
     pub(crate) const UDATA_TIMEOUT: u64 = -1i64 as u64;
+    const F_EVENTFD_DISABLED: u32 = 1 << 0;
 
     #[inline]
     pub(crate) fn new(ring_ptr: Rc<Mmap<libc::c_void>>, params: &UringParams) -> Self {
@@ -89,12 +90,18 @@ impl Queue<'_> {
         unsafe {
             let khead = &*(ptr.add(cq_off.head as usize) as *const AtomicU32);
             let ktail = &*(ptr.add(cq_off.tail as usize) as *const AtomicU32);
+            let kflags_ptr = ptr.add(cq_off.flags as usize) as *const AtomicU32;
+            let kflags = if kflags_ptr.is_null() {
+                None
+            } else {
+                Some(&*kflags_ptr)
+            };
             Self {
                 khead,
                 ktail,
                 kring_mask: *(ptr.add(cq_off.ring_mask as usize) as *const u32),
                 kring_entries: *(ptr.add(cq_off.ring_entries as usize) as *const u32),
-                kflags: &*(ptr.add(cq_off.flags as usize) as *const AtomicU32),
+                kflags,
                 koverflow: &*(ptr.add(cq_off.overflow as usize) as *const AtomicU32),
                 cqes: ptr.add(cq_off.cqes as usize) as *const Entry,
 
@@ -111,7 +118,42 @@ impl Queue<'_> {
         self.koverflow.load(Ordering::Relaxed)
     }
 
-    pub fn peek_cqe(&mut self) -> Result<Option<&Entry>> {
+    #[inline]
+    pub fn advance(&mut self, n: u32) {
+        if n > 0 {
+            self.khead_shadow = self.khead_shadow.wrapping_add(n);
+            self.khead.store(self.khead_shadow, Ordering::Release);
+        }
+    }
+
+    #[inline]
+    pub fn eventfd_enabled(&self) -> bool {
+        match self.kflags {
+            Some(kflags) => (kflags.load(Ordering::Relaxed) & Self::F_EVENTFD_DISABLED) == 0,
+            None => true,
+        }
+    }
+
+    pub fn toggle_eventfd(&self, enabled: bool) -> Result<()> {
+        if enabled == self.eventfd_enabled() {
+            return Ok(());
+        }
+        match self.kflags {
+            Some(kflags) => {
+                let mut flags = kflags.load(Ordering::Relaxed);
+                flags = if enabled {
+                    flags & !Self::F_EVENTFD_DISABLED
+                } else {
+                    flags | Self::F_EVENTFD_DISABLED
+                };
+                kflags.store(flags, Ordering::Relaxed);
+                Ok(())
+            }
+            None => Err(Error::from_raw_os_error(libc::EOPNOTSUPP)),
+        }
+    }
+
+    pub(crate) fn peek_cqe(&mut self) -> Result<Option<&Entry>> {
         loop {
             if self.khead_shadow == self.ktail_shadow {
                 self.ktail_shadow = self.ktail.load(Ordering::Acquire);
@@ -131,14 +173,6 @@ impl Queue<'_> {
             } else {
                 return Ok(Some(cqe));
             }
-        }
-    }
-
-    #[inline]
-    pub fn advance(&mut self, n: u32) {
-        if n > 0 {
-            self.khead_shadow = self.khead_shadow.wrapping_add(n);
-            self.khead.store(self.khead_shadow, Ordering::Release);
         }
     }
 
