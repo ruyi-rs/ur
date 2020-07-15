@@ -405,6 +405,7 @@ impl<'a> Uring<'a> {
         let mut ret = 0;
         loop {
             let mut flags = Enter::empty();
+            let mut cq_overflow_flush = false;
             let peeked = match self.cq.peek_cqe()? {
                 Some(cqe) => {
                     if wait_nr > 0 {
@@ -414,19 +415,22 @@ impl<'a> Uring<'a> {
                 }
                 None => {
                     if to_wait == 0 && submit == 0 {
-                        return Err(Error::from_raw_os_error(libc::EAGAIN));
+                        cq_overflow_flush = self.sq.cq_ring_needs_flush();
+                        if !cq_overflow_flush {
+                            return Err(Error::from_raw_os_error(libc::EAGAIN));
+                        }
                     }
                     None
                 }
             };
 
-            if wait_nr > 0 {
+            if wait_nr > 0 || cq_overflow_flush {
                 flags.insert(Enter::GETEVENTS);
             }
             if submit > 0 {
                 self.need_enter(submit, &mut flags);
             }
-            if wait_nr > 0 || submit > 0 {
+            if wait_nr > 0 || submit > 0 || cq_overflow_flush {
                 ret = self.penter(submit, wait_nr, &flags, sigmask)?
             }
             if ret == submit {

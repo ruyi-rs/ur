@@ -37,7 +37,7 @@ type __kernel_rwf_t = i32; // libc::c_int
 union OpFlags {
     rw: __kernel_rwf_t,
     fsync: libc::__u32, // IoRingFsync::* flags
-    poll_events: libc::__u16,
+    poll_events: libc::__u32,
     sync_range: libc::__u32,
     msg: libc::__u32,
     timeout: libc::__u32, // IoRingTimeout::* flags
@@ -105,8 +105,12 @@ impl Entry {
     }
 
     #[inline]
-    pub(crate) fn set_poll_events(&mut self, poll_events: u16) {
-        self.op_flags.poll_events = poll_events;
+    pub(crate) fn set_poll_events(&mut self, poll_events: u32) {
+        self.op_flags.poll_events = if cfg!(target_endian = "big") {
+            poll_events.reverse_bits()
+        } else {
+            poll_events
+        }
     }
 
     #[inline]
@@ -183,6 +187,8 @@ pub struct Queue<'a> {
 impl Queue<'_> {
     // needs io_uring_enter wakeup
     const NEED_WAKEUP: u32 = 1 << 0;
+    // CQ ring is overflow
+    const CQ_OVERFLOW: u32 = 1 << 1;
 
     #[inline]
     pub(crate) fn new(
@@ -291,6 +297,11 @@ impl Queue<'_> {
     #[inline]
     pub(crate) fn need_wakeup(&self) -> bool {
         (self.kflags.load(Ordering::Relaxed) & Self::NEED_WAKEUP) != 0
+    }
+
+    #[inline]
+    pub(crate) fn cq_ring_needs_flush(&self) -> bool {
+        (self.kflags.load(Ordering::Relaxed) & Self::CQ_OVERFLOW) != 0
     }
 
     #[inline]

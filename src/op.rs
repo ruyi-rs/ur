@@ -188,7 +188,7 @@ impl Op for WriteFixed<'_> {
 #[derive(Debug)]
 pub struct PollAdd {
     pub fd: RawFd,
-    pub poll_mask: u16,
+    pub poll_mask: u32,
 }
 
 impl Op for PollAdd {
