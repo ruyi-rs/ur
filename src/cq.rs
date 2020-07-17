@@ -90,11 +90,10 @@ impl Queue<'_> {
         unsafe {
             let khead = &*(ptr.add(cq_off.head as usize) as *const AtomicU32);
             let ktail = &*(ptr.add(cq_off.tail as usize) as *const AtomicU32);
-            let kflags_ptr = ptr.add(cq_off.flags as usize) as *const AtomicU32;
-            let kflags = if kflags_ptr.is_null() {
+            let kflags = if cq_off.flags == 0 {
                 None
             } else {
-                Some(&*kflags_ptr)
+                Some(&*(ptr.add(cq_off.flags as usize) as *const AtomicU32))
             };
             Self {
                 khead,
