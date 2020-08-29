@@ -164,6 +164,8 @@ impl<'a> Uring<'a> {
     const REGISTER_PROBE: libc::c_uint = 8;
     const REGISTER_PERSONALITY: libc::c_uint = 9;
     const UNREGISTER_PERSONALITY: libc::c_uint = 10;
+    const REGISTER_RESTRICTIONS: libc::c_uint = 11;
+    const REGISTER_ENABLE_RINGS: libc::c_uint = 12;
 
     #[inline]
     pub(crate) fn new(sq: sq::Queue<'a>, cq: cq::Queue<'a>, flags: Setup, fd: Fd) -> Self {
@@ -318,7 +320,7 @@ impl<'a> Uring<'a> {
     pub fn submit_and_wait(&mut self, wait_nr: u32) -> Result<u32> {
         let submitted = self.sq.flush();
         let mut flags = Enter::empty();
-        let n = if self.need_enter(submitted, &mut flags) || wait_nr > 0 {
+        let n = if self.need_enter(&mut flags) || wait_nr > 0 {
             if wait_nr > 0 || self.flags.contains(Setup::IOPOLL) {
                 flags.insert(Enter::GETEVENTS);
             }
@@ -404,8 +406,8 @@ impl<'a> Uring<'a> {
         let mut wait_nr = to_wait;
         let mut ret = 0;
         loop {
-            let mut flags = Enter::empty();
             let mut cq_overflow_flush = false;
+            let mut flags = Enter::empty();
             let peeked = match self.cq.peek_cqe()? {
                 Some(cqe) => {
                     if wait_nr > 0 {
@@ -428,7 +430,7 @@ impl<'a> Uring<'a> {
                 flags.insert(Enter::GETEVENTS);
             }
             if submit > 0 {
-                self.need_enter(submit, &mut flags);
+                self.need_enter(&mut flags);
             }
             if wait_nr > 0 || submit > 0 || cq_overflow_flush {
                 ret = self.penter(submit, wait_nr, &flags, sigmask)?
@@ -454,8 +456,8 @@ impl<'a> Uring<'a> {
     }
 
     #[inline]
-    fn need_enter(&self, submitted: u32, flags: &mut Enter) -> bool {
-        if !self.flags.contains(Setup::SQPOLL) && submitted > 0 {
+    fn need_enter(&self, flags: &mut Enter) -> bool {
+        if !self.flags.contains(Setup::SQPOLL) {
             return true;
         }
         if self.sq.need_wakeup() {

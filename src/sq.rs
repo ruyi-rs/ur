@@ -281,7 +281,7 @@ impl Queue<'_> {
     }
 
     #[inline]
-    pub(crate) fn flush(&mut self) -> u32 {
+    pub fn flush(&mut self) -> u32 {
         if self.sqe_head != self.sqe_tail {
             let to_submit = self.sqe_tail.wrapping_sub(self.sqe_head);
             self.sqe_head = self.sqe_tail;

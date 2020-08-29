@@ -752,9 +752,9 @@ impl Op for EpollCtl<'_> {
 #[derive(Debug)]
 pub struct Splice {
     pub fd_in: RawFd,
-    pub off_in: u64,
+    pub off_in: i64,
     pub fd_out: RawFd,
-    pub off_out: u64,
+    pub off_out: i64,
     pub nbytes: u32,
     pub flags: u32,
 }
@@ -769,10 +769,10 @@ impl Op for Splice {
             self.fd_out,
             ptr::null(),
             self.nbytes,
-            self.off_out,
+            self.off_out as u64,
         ) {
             Some(sqe) => {
-                sqe.set_splice_off_in(self.off_in);
+                sqe.set_splice_off_in(self.off_in as u64);
                 sqe.set_splice_fd_in(self.fd_in);
                 sqe.set_splice_flags(self.flags);
                 Some(sqe)
