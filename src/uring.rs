@@ -134,6 +134,15 @@ impl fmt::Debug for Probe {
     }
 }
 
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Restriction {
+    opcode: u16,
+    flags: u8,
+    _resv: u8,
+    _resv2: [u32; 3],
+}
+
 // io_uring_enter(2) flags
 bitflags! {
     pub struct Enter: u32 {
@@ -270,6 +279,26 @@ impl<'a> Uring<'a> {
     #[inline]
     pub unsafe fn unregister_personality(&self, id: i32) -> Result<()> {
         self.register(Self::UNREGISTER_PERSONALITY, ptr::null(), id as u32)
+    }
+
+    #[inline]
+    pub fn restrict_register_op(&self, register_op: u8) -> Result<()> {
+        todo!()
+    }
+
+    #[inline]
+    pub fn restrict_sqe_op(&self, sqe_op: u8) -> Result<()> {
+        todo!()
+    }
+
+    #[inline]
+    pub fn restrict_sqe_flags(&self, sqe_flags: u8) -> Result<()> {
+        todo!()
+    }
+
+    #[inline]
+    pub fn enable_rings(&self) -> Result<()> {
+        todo!()
     }
 
     pub fn probe(&self) -> Result<Box<Probe>> {
