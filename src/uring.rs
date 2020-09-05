@@ -136,11 +136,43 @@ impl fmt::Debug for Probe {
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-struct Restriction {
+pub struct Restriction {
     opcode: u16,
     flags: u8,
     _resv: u8,
     _resv2: [u32; 3],
+}
+
+impl Restriction {
+    const REGISTER_OP: u16 = 0;
+    const SQE_OP: u16 = 1;
+    const SQE_FLAGS_ALLOWED: u16 = 2;
+    const SQE_FLAGS_REQUIRED: u16 = 3;
+
+    #[inline]
+    pub fn register_op<T: Op>() -> Self {
+        Self {
+            opcode: Self::REGISTER_OP,
+            flags: T::CODE,
+            _resv: 0,
+            _resv2: Default::default(),
+        }
+    }
+
+    #[inline]
+    pub fn sqe_op() -> Self {
+        todo!()
+    }
+
+    #[inline]
+    pub fn sqe_flags_allowed() -> Self {
+        todo!()
+    }
+
+    #[inline]
+    pub fn sqe_flags_required() -> Self {
+        todo!()
+    }
 }
 
 // io_uring_enter(2) flags
@@ -282,23 +314,19 @@ impl<'a> Uring<'a> {
     }
 
     #[inline]
-    pub fn restrict_register_op(&self, register_op: u8) -> Result<()> {
-        todo!()
-    }
-
-    #[inline]
-    pub fn restrict_sqe_op(&self, sqe_op: u8) -> Result<()> {
-        todo!()
-    }
-
-    #[inline]
-    pub fn restrict_sqe_flags(&self, sqe_flags: u8) -> Result<()> {
-        todo!()
+    pub fn register_restrictions(&self, restrictions: &[Restriction]) -> Result<()> {
+        unsafe {
+            self.register(
+                Self::REGISTER_RESTRICTIONS,
+                restrictions.as_ptr() as *const _,
+                restrictions.len() as u32,
+            )
+        }
     }
 
     #[inline]
     pub fn enable_rings(&self) -> Result<()> {
-        todo!()
+        unsafe { self.register(Self::REGISTER_ENABLE_RINGS, ptr::null(), 0) }
     }
 
     pub fn probe(&self) -> Result<Box<Probe>> {

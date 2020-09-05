@@ -8,7 +8,7 @@ use crate::sq;
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone)]
-pub(crate) enum Code {
+pub enum Code {
     Nop,
     Readv,
     Writev,
